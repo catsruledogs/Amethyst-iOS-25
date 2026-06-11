@@ -1,3 +1,5 @@
+**I am working on updating this to support the latest snapshots right now. They changed some more lwjgl required arguments in 26.2 pre-release 4 and pre-release 5. Hopefully this will also mean that when 26.2 releases it will work right off the bat. I should have everything fixed and updated sometime this week.**
+
 This is a build of AngelAuraAmethyst iOS which has been customized to be able to launch Minecraft 26.x.x. This includes the snapshots. Do note that this is completely unofficial and probably unstable. Don't bother the Amethyst devs if something breaks. Instead, post an issue here and i'll look into it. Keyboard support is not currently working. This build bundles a custom lwjgl version and Java 25. It also does not include slimmed versions. Builds are only published in Releases and not in Actions.
 
 If anyone is able or willing to help me fix keyboard support, there is a post about it in Issues. Your help would be greatly appreciated.
