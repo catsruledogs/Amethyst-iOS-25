@@ -13,14 +13,7 @@
 #endif
 
 #cmakedefine CONFIG_BRANCH "@CONFIG_BRANCH@"
-#ifndef CONFIG_BRANCH
-#define CONFIG_BRANCH "unknown"
-#endif
-
 #cmakedefine CONFIG_COMMIT "@CONFIG_COMMIT@"
-#ifndef CONFIG_COMMIT
-#define CONFIG_COMMIT "unknown"
-#endif
 
 #cmakedefine CONFIG_CURSEFORGE_API_KEY "@CONFIG_CURSEFORGE_API_KEY@"
 

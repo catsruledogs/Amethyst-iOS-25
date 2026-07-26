@@ -3,7 +3,7 @@ project(AngelAuraAmethyst)
 
 configure_file(${CMAKE_CURRENT_LIST_DIR}/config.h.in ${CMAKE_CURRENT_LIST_DIR}/config.h)
 
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -target arm64-apple-ios -mcpu=apple-a9 -fcommon -fobjc-arc -ObjC -Wno-error=implicit-function-declaration -F'${CMAKE_OSX_SYSROOT}/System/Cryptexes/OS/System/Library/Frameworks' -mios-version-min=14.0")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -target arm64-apple-ios -mcpu=apple-a8 -fcommon -fobjc-arc -ObjC -Wno-error=implicit-function-declaration -F'${CMAKE_OSX_SYSROOT}/System/Cryptexes/OS/System/Library/Frameworks' -mios-version-min=16.0")
 set(CMAKE_C_FLAGS_DEBUG "-funwind-tables -g")
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux|^GNU$|Android")
@@ -27,23 +27,6 @@ include_directories(
   "external/ballpa1n"
   "external/ballpa1n/wrapped"
   "external/mach"
-  "../UI"
-  "../UI/Common"
-  "../UI/Root"
-  "../UI/App"
-  "../UI/Managers"
-  "../UI/Screens/MainMenu"
-  "../UI/Screens/Game"
-  "../UI/Screens/Mod"
-  "../UI/Screens/Modpack"
-  "../UI/Screens/Shader"
-  "../UI/Screens/Server"
-  "../UI/Screens/Settings"
-  "../UI/Screens/Account"
-  "../UI/Screens/Download"
-  "../UI/Screens/FileBrowser"
-  "../UI/Screens/ProfileSettings"
-  "installer/modpack"
 )
 
 # For cacio support library
@@ -66,11 +49,7 @@ target_link_libraries(awt_xawt
 
 set(CMAKE_FRAMEWORK_PATH "${CMAKE_CURRENT_LIST_DIR}/resources/Frameworks")
 
-# Flat namespace so LTW's eglGetProcAddress/gl* wrappers shadow ANGLE's
-# (LTW is dlopen'd after ANGLE, so flat ns gives LTW priority).
-# This mirrors Android's symbol resolution and is required for LTW's
-# wrapper layer to intercept GL function lookups from LWJGL.
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rpath @executable_path/Frameworks -rpath @loader_path/Frameworks -Wl,-flat_namespace -Wl,-undefined,dynamic_lookup")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rpath @executable_path/Frameworks -rpath @loader_path/Frameworks -Wl,-undefined,dynamic_lookup")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -rpath @executable_path/Frameworks -rpath @loader_path/Frameworks")
 
 # ANGLE wrapper for 1.17+
@@ -100,12 +79,6 @@ set(LTW_INCLUDES
 
 include(cmake/ltw_sources.cmake)
 
-file(GLOB_RECURSE GLSL_OPTIMIZER_SRC
-  "${LTW_DIR}/glsl_optimizer/src/*.c"
-  "${LTW_DIR}/glsl_optimizer/src/*.cpp"
-)
-list(FILTER GLSL_OPTIMIZER_SRC EXCLUDE REGEX ".*u_debug_stack_android\\.cpp$")
-
 add_library(glsl_optimizer STATIC ${GLSL_OPTIMIZER_SRC})
 target_include_directories(glsl_optimizer PRIVATE ${LTW_INCLUDES})
 set_target_properties(glsl_optimizer PROPERTIES
@@ -126,7 +99,6 @@ add_library(ltw SHARED ${LTW_CORE_SRC})
 target_include_directories(ltw PRIVATE ${LTW_INCLUDES})
 target_link_libraries(ltw
   "${GLOBAL_LDFLAGS}"
-  -Wl,-force_load,$<TARGET_FILE:glsl_optimizer>
   glsl_optimizer
   "-F'${CMAKE_CURRENT_LIST_DIR}/resources/Frameworks'"
   "-framework libEGL"
@@ -213,9 +185,14 @@ add_executable(AngelAuraAmethyst
   external/ballpa1n/wrapped/HostManagerBridge.m
   external/mach/mach_excServer.c
 
+  installer/FabricInstallViewController.m
+  installer/ForgeInstallViewController.m
+  installer/ModpackInstallViewController.m
   installer/FabricUtils.m
   installer/modpack/ModpackUtils.m
   installer/modpack/ModpackAPI.m
+  installer/modpack/CurseForgeAPI.m
+  installer/modpack/ModrinthAPI.m
 
   input/ControllerInput.m
   input/GyroInput.m
@@ -229,16 +206,24 @@ add_executable(AngelAuraAmethyst
   FileListViewController.m
   GameSurfaceView.m
   JavaGUIViewController.m
+  LauncherMenuViewController.m
+  LauncherNavigationController.m
+  LauncherNewsViewController.m
   LauncherPreferences.m
+  LauncherPreferencesViewController.m
   LauncherPrefContCfgViewController.m
   LauncherPrefGameDirViewController.m
   LauncherPrefManageJREViewController.m
+  LauncherProfileEditorViewController.m
+  LauncherProfilesViewController.m
+  LauncherSplitViewController.m
   MinecraftResourceDownloadTask.m
   MinecraftResourceUtils.m
   PickTextField.m
   PLLogOutputView.m
   PLPickerView.m
   PLPreferences.m
+  PLPrefTableViewController.m
   PLProfiles.m
   SceneDelegate.m
   SceneExternalDelegate.m
@@ -250,44 +235,8 @@ add_executable(AngelAuraAmethyst
    egl_bridge.m
    ZinkConfig.m
    input_bridge_v3.m
-   ios_uikit_bridge.m
-   utils.m
-
-   # UI
-   ../UI/Common/ThemeManager.m
-   ../UI/Common/HapticManager.m
-   ../UI/Common/CustomButton.m
-   ../UI/Common/CustomSlider.m
-   ../UI/Common/BlurContainerView.m
-   ../UI/Common/TransitionAnimator.m
-   ../UI/Common/UIView+AmethystExtensions.m
-   ../UI/Common/DownloadProgressOverlay.m
-    ../UI/Common/AmethystProjectCell.m
-    ../UI/Common/UIView+LiquidGlass.m
-    ../UI/Root/AmethystRootViewController.m
-   ../UI/Root/TopBarView.m
-   ../UI/Root/SidebarViewController.m
-   ../UI/Root/RightPanelViewController.m
-   ../UI/App/MainCoordinator.m
-   ../UI/Managers/VersionDirectoryManager.m
-   ../UI/Managers/DownloadManager.m
-   ../UI/Screens/MainMenu/MainMenuViewController.m
-   ../UI/Screens/Game/GameListViewController.m
-   ../UI/Screens/Mod/ModListViewController.m
-   ../UI/Screens/Mod/ModDetailViewController.m
-   ../UI/Screens/Mod/ModrinthService.m
-   ../UI/Screens/Mod/CurseForgeService.m
-   ../UI/Screens/Modpack/ModpackListViewController.m
-   ../UI/Screens/Shader/ShaderListViewController.m
-   ../UI/Screens/Server/ServerListViewController.m
-   ../UI/Screens/Settings/SettingsViewController.m
-   ../UI/Screens/Account/AccountViewController.m
-   ../UI/Screens/ProfileSettings/ProfileSettingsViewController.m
-   ../UI/Screens/Download/DownloadHubViewController.m
-   ../UI/Screens/Download/VersionBrowserViewController.m
-    ../UI/Screens/Download/MapListViewController.m
-    ../UI/Screens/Download/ResourcePackListViewController.m
-    ../UI/Screens/FileBrowser/FileBrowserViewController.m
+  ios_uikit_bridge.m
+  utils.m
 )
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux|^GNU$|Android")
@@ -309,11 +258,8 @@ target_link_libraries(AngelAuraAmethyst
   "-framework CoreMotion"
   "-framework GameController"
   "-framework IOKit"
-  "-framework PhotosUI"
   "-framework QuartzCore"
   "-framework Security"
-  "-framework Metal"
-  "-framework MetalKit"
   "-framework UIKit"
   "-framework UniformTypeIdentifiers"
   "-framework UnzipKit"

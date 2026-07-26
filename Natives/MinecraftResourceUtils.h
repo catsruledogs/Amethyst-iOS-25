@@ -6,8 +6,6 @@
 #define TYPE_OLDBETA 3
 #define TYPE_OLDALPHA 4
 
-extern NSMutableArray<NSDictionary *> *localVersionList, *remoteVersionList;
-
 @interface MinecraftResourceUtils : NSObject
 
 + (void)processVersion:(NSMutableDictionary *)json inheritsFrom:(NSMutableDictionary *)inheritsFrom;
@@ -15,7 +13,5 @@ extern NSMutableArray<NSDictionary *> *localVersionList, *remoteVersionList;
 
 + (NSObject *)findVersion:(NSString *)version inList:(NSArray *)list;
 + (NSObject *)findNearestVersion:(NSObject *)version expectedType:(int)type;
-+ (void)refreshLocalVersionList;
-+ (void)refreshRemoteVersionList;
 
 @end

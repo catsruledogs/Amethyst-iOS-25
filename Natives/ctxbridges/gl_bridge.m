@@ -9,7 +9,6 @@
 
 static EGLDisplay g_EglDisplay;
 static egl_library handle;
-static void* ltw_handle;
 
 void dlsym_EGL() {
     void* dl_handle = dlopen("@rpath/libtinygl4angle.dylib", RTLD_GLOBAL);
@@ -26,31 +25,24 @@ void dlsym_EGL() {
     handle.eglBindAPI = dlsym(dl_handle, "eglBindAPI");
     handle.eglChooseConfig = dlsym(dl_handle, "eglChooseConfig");
     if (useLTW) {
-        // Load LTW with RTLD_GLOBAL so its symbols (including eglGetProcAddress
-        // and all gl* wrappers) are visible globally for LWJGL's dlsym-based
-        // symbol resolution.  Keep the handle around so we can re-dlsym later.
-        ltw_handle = dlopen("@rpath/libltw.dylib", RTLD_LAZY | RTLD_GLOBAL);
-        if (ltw_handle) {
-            // Resolve EGL functions from LTW's own handle so its wrappers
-            // (eglCreateContext, eglDestroyContext, eglMakeCurrent) are
-            // picked up instead of ANGLE's.
-            handle.eglCreateContext = dlsym(ltw_handle, "eglCreateContext");
-            handle.eglDestroyContext = dlsym(ltw_handle, "eglDestroyContext");
-            handle.eglMakeCurrent = dlsym(ltw_handle, "eglMakeCurrent");
-            // Also resolve eglGetProcAddress from LTW so that all GL function
-            // lookups go through LTW's wrapper → override → host resolution
-            // chain rather than hitting ANGLE's eglGetProcAddress directly.
-            handle.eglGetProcAddress = dlsym(ltw_handle, "eglGetProcAddress");
+        // Resolve EGL functions from LTW's own handle so its wrappers
+        // (eglCreateContext, eglDestroyContext, eglMakeCurrent) are
+        // picked up. RTLD_DEFAULT may find ANGLE's instead due to flat
+        // namespace search order, so use dlopen + dlsym on the LTW
+        // handle directly.
+        void* ltw = dlopen("@rpath/libltw.dylib", RTLD_LAZY | RTLD_LOCAL);
+        if (ltw) {
+            handle.eglCreateContext = dlsym(ltw, "eglCreateContext");
+            handle.eglDestroyContext = dlsym(ltw, "eglDestroyContext");
+            handle.eglMakeCurrent = dlsym(ltw, "eglMakeCurrent");
         }
         if (!handle.eglCreateContext) handle.eglCreateContext = dlsym(dl_handle, "eglCreateContext");
         if (!handle.eglDestroyContext) handle.eglDestroyContext = dlsym(dl_handle, "eglDestroyContext");
         if (!handle.eglMakeCurrent) handle.eglMakeCurrent = dlsym(dl_handle, "eglMakeCurrent");
-        if (!handle.eglGetProcAddress) handle.eglGetProcAddress = dlsym(dl_handle, "eglGetProcAddress");
     } else {
         handle.eglCreateContext = dlsym(dl_handle, "eglCreateContext");
         handle.eglDestroyContext = dlsym(dl_handle, "eglDestroyContext");
         handle.eglMakeCurrent = dlsym(dl_handle, "eglMakeCurrent");
-        handle.eglGetProcAddress = dlsym(dl_handle, "eglGetProcAddress");
     }
     handle.eglCreateWindowSurface = dlsym(dl_handle, "eglCreateWindowSurface");
     handle.eglDestroySurface = dlsym(dl_handle, "eglDestroySurface");

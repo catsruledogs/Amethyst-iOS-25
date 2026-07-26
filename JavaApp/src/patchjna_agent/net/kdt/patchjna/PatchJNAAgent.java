@@ -23,22 +23,8 @@ public class PatchJNAAgent implements ClassFileTransformer {
             System.out.println("PatchJNAAgent: Patching Sodium PostLaunchChecks - suppress Pojav check");
             return patchReturnMethod(classfileBuffer, "isUsingPojavLauncher", "()Z", false);
         } else if (className.equals("net/caffeinemc/mods/sodium/client/compatibility/checks/PreLaunchChecks")) {
-            System.out.println("PatchJNAAgent: Patching Sodium PreLaunchChecks - bypass all checks");
-            String[] checkMethods = {
-                "isUsingKnownCompatibleLwjglVersion",
-                "isUsingCompatibleLwjglVersion",
-                "checkLwjglVersion",
-                "isLwjglVersionCompatible"
-            };
-            byte[] result = classfileBuffer;
-            for (String method : checkMethods) {
-                byte[] patched = patchReturnMethod(result, method, "()Z", true);
-                if (patched != result) {
-                    System.out.println("PatchJNAAgent: Patched method " + method);
-                    result = patched;
-                }
-            }
-            if (result != classfileBuffer) return result;
+            System.out.println("PatchJNAAgent: Patching Sodium PreLaunchChecks - fake LWJGL 3.4.1 version");
+            return patchReturnMethod(classfileBuffer, "isUsingKnownCompatibleLwjglVersion", "()Z", true);
         }
         return classfileBuffer;
     }

@@ -47,9 +47,8 @@ public class PojavLauncher {
             Class.forName("com.github.caciocavallosilano.cacio.ctc.CTCPreloadClassLoader");
         } catch (ClassNotFoundException e) {}
 
-        String runJar = System.getProperty("pojav.runJar");
-        if (runJar != null) {
-            UIKit.callback_JavaGUIViewController_launchJarFile(runJar, new String[0]);
+        if (args[0].equals("-jar")) {
+            UIKit.callback_JavaGUIViewController_launchJarFile(args[1], Arrays.copyOfRange(args, 2, args.length));
         } else {
             launchMinecraft(args);
         }
@@ -89,7 +88,7 @@ public class PojavLauncher {
 
         MinecraftAccount account = MinecraftAccount.load(args[0]);
         JMinecraftVersionList.Version version = Tools.getVersionInfo(args[1]);
-        System.out.println("Launching Minecraft " + (version != null ? version.id : "null"));
+        System.out.println("Launching Minecraft " + version.id);
         String configPath;
         if (version.logging != null) {
             if (version.logging.client.file.id.equals("client-1.12.xml")) {

@@ -311,7 +311,7 @@ const GLubyte* glGetString(GLenum name) {
         case GL_SHADING_LANGUAGE_VERSION:
             return (const GLubyte*)"4.60 LTW";
         case GL_VENDOR:
-            return (const GLubyte*)"congcq (ported to iOS), artDev, SerpentSpirale, CADIndie";
+            return (const GLubyte*)"artDev, SerpentSpirale, CADIndie";
         case GL_EXTENSIONS:
             if(current_context->extensions_string != NULL) return (const GLubyte*)current_context->extensions_string;
             return (const GLubyte*)es3_functions.glGetString(GL_EXTENSIONS);

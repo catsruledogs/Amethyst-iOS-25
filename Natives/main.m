@@ -233,7 +233,7 @@ void init_setupMultiDir() {
     [fm removeItemAtPath:lasmPath error:nil];
     [fm createSymbolicLinkAtPath:lasmPath withDestinationPath:multidirPath error:nil];
     [fm changeCurrentDirectoryPath:lasmPath];
-    setenv("POJAV_GAME_DIR", multidirPath.UTF8String, 1);
+    setenv("POJAV_GAME_DIR", lasmPath.UTF8String, 1);
 }
 
 void init_setupResolvConf() {

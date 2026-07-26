@@ -26,10 +26,8 @@ import java.net.URLClassLoader;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import net.kdt.pojavlaunch.uikit.UIKit;
 import net.kdt.pojavlaunch.utils.JSONUtils;
 import net.kdt.pojavlaunch.value.DependentLibrary;
@@ -55,12 +53,10 @@ public final class Tools {
     public static final String OBSOLETE_RESOURCES_PATH=DIR_GAME_NEW + "/resources";
 
     public static void launchMinecraft(MinecraftAccount profile, final JMinecraftVersionList.Version versionInfo) throws Throwable {
-        System.out.println("[DEBUG] launchMinecraft: id=" + versionInfo.id + " inheritsFrom=" + versionInfo.inheritsFrom + " assets=" + versionInfo.assets + " mainClass=" + versionInfo.mainClass);
         String[] launchArgs = getMinecraftArgs(profile, versionInfo);
-        System.out.println("[DEBUG] Minecraft Args: " + Arrays.toString(launchArgs));
+        // System.out.println("Minecraft Args: " + Arrays.toString(launchArgs));
 
         final String launchClassPath = generateLaunchClassPath(versionInfo);
-        System.out.println("[DEBUG] Launch classpath: " + launchClassPath);
 
         System.out.println("Args init finished. Now starting game");
 
@@ -74,57 +70,10 @@ public final class Tools {
                 loader.addURL(new File(s).toURI().toURL());
             }
         }
-
-        // Ensure Log4j libraries are accessible (needed by Fabric mods like config_manager)
-        String mainClass = versionInfo.mainClass;
-        if (mainClass != null && (mainClass.contains("fabric") || mainClass.contains("quilt"))) {
-            loadLog4jLibraries(loader);
-        }
-
-        Class<?> clazz = loader.loadClass(mainClass);
+            
+        Class<?> clazz = loader.loadClass(versionInfo.mainClass);
         Method method = clazz.getMethod("main", String[].class);
         method.invoke(null, new Object[]{launchArgs});
-    }
-
-    private static final String[][] LOG4J_ARTIFACTS = {
-        {"org/apache/logging/log4j/log4j-api/2.26.0/log4j-api-2.26.0.jar", "https://libraries.minecraft.net/org/apache/logging/log4j/log4j-api/2.26.0/log4j-api-2.26.0.jar"},
-        {"org/apache/logging/log4j/log4j-core/2.26.0/log4j-core-2.26.0.jar", "https://libraries.minecraft.net/org/apache/logging/log4j/log4j-core/2.26.0/log4j-core-2.26.0.jar"},
-        {"org/apache/logging/log4j/log4j-slf4j2-impl/2.26.0/log4j-slf4j2-impl-2.26.0.jar", "https://libraries.minecraft.net/org/apache/logging/log4j/log4j-slf4j2-impl/2.26.0/log4j-slf4j2-impl-2.26.0.jar"},
-    };
-
-    private static void loadLog4jLibraries(PojavClassLoader loader) throws IOException {
-        boolean foundAny = false;
-        for (String[] artifact : LOG4J_ARTIFACTS) {
-            File jarFile = new File(DIR_HOME_LIBRARY, artifact[0]);
-            if (jarFile.exists()) {
-                loader.addURL(jarFile.toURI().toURL());
-                System.out.println("Added Log4j jar: " + jarFile.getAbsolutePath());
-                foundAny = true;
-            }
-        }
-        if (foundAny) return;
-
-        // Fallback: download Log4j from Maven if not found locally
-        System.out.println("Log4j libraries not found, downloading from Maven...");
-        File log4jDir = new File(DIR_HOME_LIBRARY, "org/apache/logging/log4j");
-        for (String[] artifact : LOG4J_ARTIFACTS) {
-            File destFile = new File(DIR_HOME_LIBRARY, artifact[0]);
-            destFile.getParentFile().mkdirs();
-            try {
-                URL url = new URL(artifact[1]);
-                try (InputStream in = url.openStream(); OutputStream out = new FileOutputStream(destFile)) {
-                    byte[] buf = new byte[8192];
-                    int n;
-                    while ((n = in.read(buf)) >= 0) {
-                        out.write(buf, 0, n);
-                    }
-                }
-                loader.addURL(destFile.toURI().toURL());
-                System.out.println("Downloaded and added Log4j jar: " + destFile.getAbsolutePath());
-            } catch (Exception e) {
-                System.err.println("Failed to download Log4j library: " + artifact[0] + " - " + e.getMessage());
-            }
-        }
     }
 
     public static String[] getMinecraftArgs(MinecraftAccount profile, JMinecraftVersionList.Version versionInfo) {
@@ -155,8 +104,7 @@ public final class Tools {
         varArgMap.put("natives_directory", System.getProperty("java.library.path"));
 
         List<String> minecraftArgs = new ArrayList<String>();
-        boolean hasArgs = versionInfo.arguments != null && versionInfo.arguments.game != null && versionInfo.arguments.game.length > 0;
-        if (hasArgs) {
+        if (versionInfo.arguments != null) {
             // Support Minecraft 1.13+
             for (Object arg : versionInfo.arguments.game) {
                 if (arg instanceof String) {
@@ -180,30 +128,6 @@ public final class Tools {
                     */
                 }
             }
-        }
-        if (!hasArgs && versionInfo.minecraftArguments == null) {
-            // Default arguments for modern Minecraft when version JSON lacks them
-            String[][] defaultArgs = {
-                {"--username", "${auth_player_name}"},
-                {"--version", "${version_name}"},
-                {"--gameDir", "${game_directory}"},
-                {"--assetsDir", "${assets_root}"},
-                {"--assetIndex", "${assets_index_name}"},
-                {"--uuid", "${auth_uuid}"},
-                {"--accessToken", "${auth_session}"},
-                {"--userType", "${user_type}"},
-                {"--versionType", "${version_type}"},
-                {"--xuid", "${auth_xuid}"},
-                {"--clientId", "${clientid}"},
-            };
-            for (String[] argPair : defaultArgs) {
-                minecraftArgs.add(argPair[0]);
-                minecraftArgs.add(argPair[1]);
-                if (argPair[0].equals("--xuid")) {
-                    varArgMap.put("user_type", "msa");
-                }
-            }
-            System.out.println("[DEBUG] Using default Minecraft arguments");
         }
         String[] argsFromJson = JSONUtils.insertJSONValueList(
             splitAndFilterEmpty(
@@ -266,7 +190,6 @@ public final class Tools {
     }
 */
     public static String generateLaunchClassPath(JMinecraftVersionList.Version info) {
-        System.out.println("[DEBUG] generateLaunchClassPath: info.id=" + info.id);
         StringBuilder libStr = new StringBuilder(); //versnDir + "/" + version + "/" + version + ".jar:";
 
         String[] classpath = generateLibClasspath(info);
@@ -298,10 +221,7 @@ public final class Tools {
             }
             libStr.append(perJar + ":");
         }
-        String jarPath = DIR_HOME_VERSION + "/" + info.id + "/" + info.id + ".jar";
-        File jarFile = new File(jarPath);
-        System.out.println("[DEBUG] Main JAR: " + jarPath + " exists=" + jarFile.exists() + " size=" + (jarFile.exists() ? jarFile.length() : -1));
-        libStr.append(jarPath);
+        libStr.append(DIR_HOME_VERSION + "/" + info.id + "/" + info.id + ".jar");
 
         return libStr.toString();
     }
@@ -333,7 +253,6 @@ public final class Tools {
     }
 
     public static void preProcessLibraries(DependentLibrary[] libraries) {
-        if (libraries == null) return;
         // Ignore some libraries since they are unsupported (jinput, text2speech) or unused (LWJGL)
         // Support for text2speech is not planned, so skip it for now.
         for (int i = 0; i < libraries.length; i++) {
@@ -347,13 +266,7 @@ public final class Tools {
                     continue;
             }
 
-            String[] libParts = libItem.name.split(":");
-            if (libParts.length < 3) {
-                System.out.println("Skipping malformed library entry: " + libItem.name);
-                libItem._skip = true;
-                continue;
-            }
-            String[] version = libParts[2].split("\\.");
+            String[] version = libItem.name.split(":")[2].split("\\.");
             if (libItem.name.startsWith("net.java.dev.jna:jna:")) {
                 // Special handling for LabyMod 1.8.9 and Forge 1.12.2(?)
                 // we have libjnidispatch 5.13.0 in Frameworks directory
@@ -398,106 +311,87 @@ createLibraryInfo(libItem);
 
     public static JMinecraftVersionList.Version getVersionInfo(String versionName) {
         try {
-            System.out.println("[DEBUG] getVersionInfo: loading version " + versionName);
-            JMinecraftVersionList.Version version = Tools.GLOBAL_GSON.fromJson(read(DIR_HOME_VERSION + "/" + versionName + "/" + versionName + ".json"), JMinecraftVersionList.Version.class);
-            System.out.println("[DEBUG] Raw version: id=" + version.id + " inheritsFrom=" + version.inheritsFrom + " assets=" + version.assets + " mainClass=" + version.mainClass);
-            
-            // Resolve the full inheritsFrom chain recursively
-            if (version.inheritsFrom != null && !version.inheritsFrom.equals(version.id)) {
-                version = resolveInheritsChain(version, new HashSet<String>());
+            JMinecraftVersionList.Version customVer = Tools.GLOBAL_GSON.fromJson(read(DIR_HOME_VERSION + "/" + versionName + "/" + versionName + ".json"), JMinecraftVersionList.Version.class);
+            if (customVer.inheritsFrom == null || customVer.inheritsFrom.equals(customVer.id)) {
+                return customVer;
+            } else {
+                JMinecraftVersionList.Version inheritsVer = Tools.GLOBAL_GSON.fromJson(read(DIR_HOME_VERSION + "/" + customVer.inheritsFrom + "/" + customVer.inheritsFrom + ".json"), JMinecraftVersionList.Version.class);
+                inheritsVer.inheritsFrom = inheritsVer.id;
+                
+                insertSafety(inheritsVer, customVer,
+                             "assetIndex", "assets", "id",
+                             "mainClass", "minecraftArguments",
+                             "releaseTime", "time", "type"
+                             );
+
+                // Go through the libraries, remove the ones overridden by the custom version
+                List<DependentLibrary> inheritLibraryList = new ArrayList<>(Arrays.asList(inheritsVer.libraries));
+                outer_loop:
+                for(DependentLibrary library : customVer.libraries){
+                    // Clean libraries overridden by the custom version
+                    String libName = library.name.substring(0, library.name.lastIndexOf(":"));
+
+                    for(DependentLibrary inheritLibrary : inheritLibraryList) {
+                        String inheritLibName = inheritLibrary.name.substring(0, inheritLibrary.name.lastIndexOf(":"));
+
+                        if(libName.equals(inheritLibName)){
+                            System.out.println("Library " + libName + ": Replaced version " +
+                                    libName.substring(libName.lastIndexOf(":") + 1) + " with " +
+                                    inheritLibName.substring(inheritLibName.lastIndexOf(":") + 1));
+
+                            // Remove the library , superseded by the overriding libs
+                            inheritLibraryList.remove(inheritLibrary);
+                            continue outer_loop;
+                        }
+                    }
+                }
+
+                // Fuse libraries
+                inheritLibraryList.addAll(Arrays.asList(customVer.libraries));
+                inheritsVer.libraries = inheritLibraryList.toArray(new DependentLibrary[0]);
+                preProcessLibraries(inheritsVer.libraries);
+
+                // Inheriting Minecraft 1.13+ with append custom args
+                if (inheritsVer.arguments != null && customVer.arguments != null) {
+                    List totalArgList = new ArrayList();
+                    totalArgList.addAll(Arrays.asList(inheritsVer.arguments.game));
+                    
+                    int nskip = 0;
+                    for (int i = 0; i < customVer.arguments.game.length; i++) {
+                        if (nskip > 0) {
+                            nskip--;
+                            continue;
+                        }
+                        
+                        Object perCustomArg = customVer.arguments.game[i];
+                        if (perCustomArg instanceof String) {
+                            String perCustomArgStr = (String) perCustomArg;
+                            // Check if there is a duplicate argument on combine
+                            if (perCustomArgStr.startsWith("--") && totalArgList.contains(perCustomArgStr)) {
+                                perCustomArg = customVer.arguments.game[i + 1];
+                                if (perCustomArg instanceof String) {
+                                    perCustomArgStr = (String) perCustomArg;
+                                    // If the next is argument value, skip it
+                                    if (!perCustomArgStr.startsWith("--")) {
+                                        nskip++;
+                                    }
+                                }
+                            } else {
+                                totalArgList.add(perCustomArgStr);
+                            }
+                        } else if (!totalArgList.contains(perCustomArg)) {
+                            totalArgList.add(perCustomArg);
+                        }
+                    }
+
+                    inheritsVer.arguments.game = totalArgList.toArray(new Object[0]);
+                }
+
+                return inheritsVer;
             }
-            
-            System.out.println("[DEBUG] Merged version: id=" + version.id + " inheritsFrom=" + version.inheritsFrom + " assets=" + version.assets + " mainClass=" + version.mainClass + " logging=" + (version.logging != null ? version.logging.client != null ? version.logging.client.file != null ? version.logging.client.file.id : "noFile" : "noClient" : "null"));
-            
-            preProcessLibraries(version.libraries);
-            
-            return version;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-    }
-    
-    private static JMinecraftVersionList.Version resolveInheritsChain(JMinecraftVersionList.Version child, Set<String> seen) throws IOException {
-        if (child.inheritsFrom == null || child.inheritsFrom.equals(child.id) || seen.contains(child.inheritsFrom)) {
-            return child;
-        }
-        seen.add(child.inheritsFrom);
-        
-        JMinecraftVersionList.Version parent = Tools.GLOBAL_GSON.fromJson(
-            read(DIR_HOME_VERSION + "/" + child.inheritsFrom + "/" + child.inheritsFrom + ".json"),
-            JMinecraftVersionList.Version.class);
-        
-        // Recursively resolve grandparent first
-        if (parent.inheritsFrom != null && !parent.inheritsFrom.equals(parent.id)) {
-            parent = resolveInheritsChain(parent, seen);
-        }
-        
-        // Merge child's fields into parent (keep child id so jar path resolves correctly)
-        insertSafety(parent, child,
-                     "id", "assetIndex", "assets",
-                     "mainClass", "minecraftArguments",
-                     "releaseTime", "time", "type"
-                     );
-
-        // Merge libraries: child's libs override parent's libs by name
-        List<DependentLibrary> parentLibList = new ArrayList<>(Arrays.asList(parent.libraries));
-        for (DependentLibrary library : child.libraries) {
-            if (library.name == null || !library.name.contains(":")) continue;
-            String libGroup = library.name.substring(0, library.name.lastIndexOf(":"));
-            int matchedIdx = -1;
-            for (int i = 0; i < parentLibList.size(); i++) {
-                String parentLibName = parentLibList.get(i).name;
-                if (parentLibName != null && parentLibName.contains(":")) {
-                    String parentLibGroup = parentLibName.substring(0, parentLibName.lastIndexOf(":"));
-                    if (libGroup.equals(parentLibGroup)) {
-                        matchedIdx = i;
-                        break;
-                    }
-                }
-            }
-            if (matchedIdx >= 0) {
-                parentLibList.set(matchedIdx, library);
-            } else {
-                parentLibList.add(library);
-            }
-        }
-        parent.libraries = parentLibList.toArray(new DependentLibrary[0]);
-
-        // Merge arguments for Minecraft 1.13+
-        if (parent.arguments != null && child.arguments != null) {
-            List totalArgList = new ArrayList();
-            totalArgList.addAll(Arrays.asList(parent.arguments.game));
-            
-            int nskip = 0;
-            for (int i = 0; i < child.arguments.game.length; i++) {
-                if (nskip > 0) {
-                    nskip--;
-                    continue;
-                }
-                
-                Object perCustomArg = child.arguments.game[i];
-                if (perCustomArg instanceof String) {
-                    String perCustomArgStr = (String) perCustomArg;
-                    if (perCustomArgStr.startsWith("--") && totalArgList.contains(perCustomArgStr)) {
-                        perCustomArg = child.arguments.game[i + 1];
-                        if (perCustomArg instanceof String) {
-                            perCustomArgStr = (String) perCustomArg;
-                            if (!perCustomArgStr.startsWith("--")) {
-                                nskip++;
-                            }
-                        }
-                    } else {
-                        totalArgList.add(perCustomArgStr);
-                    }
-                } else if (!totalArgList.contains(perCustomArg)) {
-                    totalArgList.add(perCustomArg);
-                }
-            }
-
-            parent.arguments.game = totalArgList.toArray(new Object[0]);
-        }
-
-        return parent;
     }
 
     // Prevent NullPointerException

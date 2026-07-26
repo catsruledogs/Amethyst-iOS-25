@@ -65,10 +65,6 @@ static AppleGPUGeneration _cachedGPUGeneration = AppleGPUGenerationUnknown;
         @"iPhone17,2": @(AppleGPUGenerationA18),
         @"iPhone17,3": @(AppleGPUGenerationA18),
         @"iPhone17,4": @(AppleGPUGenerationA18),
-        @"iPhone18,1": @(AppleGPUGenerationA19),
-        @"iPhone18,2": @(AppleGPUGenerationA19),
-        @"iPhone18,3": @(AppleGPUGenerationA19),
-        @"iPhone18,4": @(AppleGPUGenerationA19),
 
         @"iPad6,11": @(AppleGPUGenerationA9),
         @"iPad6,12": @(AppleGPUGenerationA9),
@@ -108,12 +104,6 @@ static AppleGPUGeneration _cachedGPUGeneration = AppleGPUGenerationUnknown;
         @"iPad14,4": @(AppleGPUGenerationM2),
         @"iPad14,5": @(AppleGPUGenerationA15),
         @"iPad14,6": @(AppleGPUGenerationA15),
-        @"iPad16,1": @(AppleGPUGenerationM4),
-        @"iPad16,2": @(AppleGPUGenerationM4),
-        @"iPad16,3": @(AppleGPUGenerationM4),
-        @"iPad16,4": @(AppleGPUGenerationM4),
-        @"iPad16,5": @(AppleGPUGenerationM5),
-        @"iPad16,6": @(AppleGPUGenerationM5),
     };
 
     NSNumber *genNum = deviceMap[machine];
@@ -129,12 +119,6 @@ static AppleGPUGeneration _cachedGPUGeneration = AppleGPUGenerationUnknown;
                     _cachedGPUGeneration = AppleGPUGenerationM2;
                 } else {
                     _cachedGPUGeneration = AppleGPUGenerationA14;
-                }
-            } else if ([machine containsString:@"iPad16"]) {
-                if ([[machine substringFromIndex:7] intValue] >= 5) {
-                    _cachedGPUGeneration = AppleGPUGenerationM5;
-                } else {
-                    _cachedGPUGeneration = AppleGPUGenerationM4;
                 }
             } else {
                 _cachedGPUGeneration = AppleGPUGenerationA12;
@@ -158,12 +142,10 @@ static AppleGPUGeneration _cachedGPUGeneration = AppleGPUGenerationUnknown;
         case AppleGPUGenerationA16: return @"A16";
         case AppleGPUGenerationA17: return @"A17 Pro";
         case AppleGPUGenerationA18: return @"A18";
-        case AppleGPUGenerationA19: return @"A19 Pro";
-        case AppleGPUGenerationM1:  return @"M1";  return @"M1";
+        case AppleGPUGenerationM1:  return @"M1";
         case AppleGPUGenerationM2:  return @"M2";
         case AppleGPUGenerationM3:  return @"M3";
         case AppleGPUGenerationM4:  return @"M4";
-        case AppleGPUGenerationM5:  return @"M5";
         default: return @"Unknown";
     }
 }
@@ -210,12 +192,10 @@ static AppleGPUGeneration _cachedGPUGeneration = AppleGPUGenerationUnknown;
 
         case AppleGPUGenerationA17:
         case AppleGPUGenerationA18:
-        case AppleGPUGenerationA19:
         case AppleGPUGenerationM1:
         case AppleGPUGenerationM2:
         case AppleGPUGenerationM3:
         case AppleGPUGenerationM4:
-        case AppleGPUGenerationM5:
             features |= ZinkAPIFeatureTessellationShader;
             features |= ZinkAPIFeatureGeometryShader;
             features |= ZinkAPIFeatureComputeShader;
@@ -254,12 +234,10 @@ static AppleGPUGeneration _cachedGPUGeneration = AppleGPUGenerationUnknown;
         case AppleGPUGenerationA16:
         case AppleGPUGenerationA17:
         case AppleGPUGenerationA18:
-        case AppleGPUGenerationA19:
         case AppleGPUGenerationM1:
         case AppleGPUGenerationM2:
         case AppleGPUGenerationM3:
         case AppleGPUGenerationM4:
-        case AppleGPUGenerationM5:
             return ZinkOptimizationLevelUltra;
         default:
             return ZinkOptimizationLevelMedium;

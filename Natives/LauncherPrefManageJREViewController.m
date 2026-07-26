@@ -1,6 +1,6 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "WFWorkflowProgressView.h"
-#import "MinecraftResourceUtils.h"
+#import "LauncherNavigationController.h"
 #import "LauncherPreferences.h"
 #import "LauncherPrefManageJREViewController.h"
 #import "NSFileManager+NRFileManager.h"
@@ -38,20 +38,17 @@ static WFWorkflowProgressView* currentProgressView;
 @property(nonatomic) NSMutableDictionary<NSString *, NSString *> *selectedRuntimes;
 @property(nonatomic) UIMenu* currentMenu;
 @property(nonatomic, weak) NSIndexPath* installingIndexPath;
-@property(nonatomic) UIProgressView *localProgressView;
-@property(nonatomic) UILabel *localProgressLabel;
-@property(nonatomic) NSProgress *importTotalProgress;
-@property(nonatomic) NSProgress *importFileProgress;
 @end
 
 @implementation LauncherPrefManageJREViewController
 
 + (LauncherPrefManageJREViewController *)currentInstance {
-    UIViewController *top = currentVC();
-    if ([top isKindOfClass:LauncherPrefManageJREViewController.class]) {
-        return (id)top;
+    UISplitViewController *splitVC = (id)currentVC();
+    LauncherNavigationController *nav = (id)splitVC.viewControllers[1];
+    if (![nav.topViewController isKindOfClass:LauncherPrefManageJREViewController.class]) {
+        return nil;
     }
-    return nil;
+    return (id)nav.topViewController;
 }
 
 - (void)viewDidLoad
@@ -82,8 +79,9 @@ static WFWorkflowProgressView* currentProgressView;
 }
 
 + (void)actionCancelImportRuntime {
-    LauncherPrefManageJREViewController *vc = self.currentInstance;
-    [vc.importTotalProgress cancel];
+    UISplitViewController *splitVC = (id)currentVC();
+    LauncherNavigationController *nav = (id)splitVC.viewControllers[1];
+    [nav.progressViewMain.observedProgress cancel];
 }
 
 - (void)actionImportRuntime {
@@ -95,50 +93,28 @@ static WFWorkflowProgressView* currentProgressView;
 }
 
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentAtURL:(NSURL *)url {
-    self.navigationItem.rightBarButtonItem.enabled = NO;
-    self.tableView.userInteractionEnabled = NO;
-
-    self.localProgressView = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
-    self.localProgressView.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.localProgressView];
-    [NSLayoutConstraint activateConstraints:@[
-        [self.localProgressView.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:16],
-        [self.localProgressView.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-16],
-        [self.localProgressView.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],
-    ]];
-
-    self.localProgressLabel = [[UILabel alloc] init];
-    self.localProgressLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.localProgressLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
-    self.localProgressLabel.textColor = UIColor.secondaryLabelColor;
-    self.localProgressLabel.textAlignment = NSTextAlignmentCenter;
-    [self.view addSubview:self.localProgressLabel];
-    [NSLayoutConstraint activateConstraints:@[
-        [self.localProgressLabel.leadingAnchor constraintEqualToAnchor:self.localProgressView.leadingAnchor],
-        [self.localProgressLabel.trailingAnchor constraintEqualToAnchor:self.localProgressView.trailingAnchor],
-        [self.localProgressLabel.topAnchor constraintEqualToAnchor:self.localProgressView.bottomAnchor constant:4],
-    ]];
+    LauncherNavigationController *nav = (id)self.navigationController;
+    [nav setInteractionEnabled:NO forDownloading:NO];
 
     [url startAccessingSecurityScopedResource];
     NSUInteger xzSize = [NSFileManager.defaultManager attributesOfItemAtPath:url.path error:nil].fileSize;
 
-    self.importTotalProgress = [NSProgress progressWithTotalUnitCount:xzSize];
-    self.importFileProgress = [NSProgress progressWithTotalUnitCount:0];
-    self.localProgressView.observedProgress = self.importTotalProgress;
+    NSProgress *totalProgress = [NSProgress progressWithTotalUnitCount:xzSize];
+    NSProgress *fileProgress = [NSProgress progressWithTotalUnitCount:0];
+    nav.progressViewMain.observedProgress = totalProgress;
+    nav.progressViewSub.observedProgress = fileProgress;
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
 
         NSString *outPath = [NSString stringWithFormat:@"%s/java_runtimes/%@", getenv("POJAV_HOME"),
             [url.path substringToIndex:url.path.length-7].lastPathComponent];
         NSString *error = [LauncherPrefManageJREViewController extractTarXZ:url.path
-        to:outPath progress:self.importTotalProgress fileProgress:self.importFileProgress
+        to:outPath progress:totalProgress fileProgress:fileProgress
         fileCallback:^(NSString* name) {
-            NSString *completedSize = [NSByteCountFormatter stringFromByteCount:self.importFileProgress.completedUnitCount countStyle:NSByteCountFormatterCountStyleMemory];
-            NSString *totalSize = [NSByteCountFormatter stringFromByteCount:self.importFileProgress.totalUnitCount countStyle:NSByteCountFormatterCountStyleMemory];
-            dispatch_async(dispatch_get_main_queue(), ^{
-                self.localProgressLabel.text = [NSString stringWithFormat:@"(%@ / %@) %@", completedSize, totalSize, name];
-            });
-            currentProgressView.fractionCompleted = self.importTotalProgress.fractionCompleted;
+            NSString *completedSize = [NSByteCountFormatter stringFromByteCount:fileProgress.completedUnitCount countStyle:NSByteCountFormatterCountStyleMemory];
+            NSString *totalSize = [NSByteCountFormatter stringFromByteCount:fileProgress.totalUnitCount countStyle:NSByteCountFormatterCountStyleMemory];
+            nav.progressText.text = [NSString stringWithFormat:@"(%@ / %@) %@", completedSize, totalSize, name];
+            currentProgressView.fractionCompleted = totalProgress.fractionCompleted;
         }];
         [url stopAccessingSecurityScopedResource];
 
@@ -150,24 +126,20 @@ static WFWorkflowProgressView* currentProgressView;
             LauncherPrefManageJREViewController *vc = LauncherPrefManageJREViewController.currentInstance;
             currentProgressView = nil;
 
-            if ((error || self.importTotalProgress.cancelled) && vc.installingIndexPath) {
+            if ((error || totalProgress.cancelled) && vc.installingIndexPath) {
                 [vc removeRuntimeAtIndexPath:vc.installingIndexPath];
             } else {
-                NSNumber *version = vc.sortedJavaVersions[vc.installingIndexPath.section];
-                NSString *name = vc.javaRuntimes[version][vc.installingIndexPath.row];
+                NSNumber *version = self.sortedJavaVersions[vc.installingIndexPath.section];
+                NSString *name = self.javaRuntimes[version][vc.installingIndexPath.row];
                 objc_setAssociatedObject(name, @"installing", @(NO), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             }
             vc.installingIndexPath = nil;
             [vc.tableView reloadData];
 
-            vc.navigationItem.rightBarButtonItem.enabled = YES;
-            vc.tableView.userInteractionEnabled = YES;
-            [vc.localProgressView removeFromSuperview];
-            vc.localProgressView = nil;
-            [vc.localProgressLabel removeFromSuperview];
-            vc.localProgressLabel = nil;
-            vc.importTotalProgress = nil;
-            vc.importFileProgress = nil;
+            [nav setInteractionEnabled:YES forDownloading:NO];
+            nav.progressViewMain.observedProgress = nil;
+            nav.progressViewSub.observedProgress = nil;
+            nav.progressText.text = @"";
         });
     });
 }
@@ -192,8 +164,6 @@ static WFWorkflowProgressView* currentProgressView;
         case DEFAULT_JRE: return localize(@"preference.manage_runtime.footer.default", nil);
         case 8: return localize(@"preference.manage_runtime.footer.java8", nil);
         case 17: return localize(@"preference.manage_runtime.footer.java17", nil);
-        case 21: return @"Java 21 runs modern Minecraft (1.17–1.21).";
-        case 25: return @"Java 25 runs latest Minecraft (1.21+ / 26.x).";
         default: return nil;
     }
 }
@@ -241,6 +211,7 @@ static WFWorkflowProgressView* currentProgressView;
     if (isInstalling) {
         self.installingIndexPath = indexPath;
 
+        LauncherNavigationController *nav = (id)self.navigationController;
         if (!currentProgressView) {
             currentProgressView = [[NSClassFromString(@"WFWorkflowProgressView") alloc] initWithFrame:CGRectMake(0, 0, 30, 30)];
             currentProgressView.resolvedTintColor = self.view.tintColor;

@@ -3,8 +3,8 @@
  * Copyright (c) 2025 SerpentSpirale, artDev, CADIndie.
  * For use under LGPL-3.0
  */
-#include <math.h>
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 #include <ctype.h>

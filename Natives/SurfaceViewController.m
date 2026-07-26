@@ -59,8 +59,6 @@ static GameSurfaceView* pojavWindow;
 @property(nonatomic) UIImpactFeedbackGenerator *lightHaptic;
 @property(nonatomic) UIImpactFeedbackGenerator *mediumHaptic;
 
-@property(nonatomic) NSString *jarPath;
-
 @end
 
 @implementation SurfaceViewController
@@ -68,14 +66,6 @@ static GameSurfaceView* pojavWindow;
 - (instancetype)initWithMetadata:(NSDictionary *)metadata {
     self = [super init];
     self.metadata = metadata;
-    self.jarPath = nil;
-    return self;
-}
-
-- (instancetype)initWithJarPath:(NSString *)jarPath {
-    self = [super init];
-    self.metadata = nil;
-    self.jarPath = jarPath;
     return self;
 }
 
@@ -491,29 +481,16 @@ static GameSurfaceView* pojavWindow;
 
 - (void)launchMinecraft {
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        int ret;
-        if (self.jarPath) {
-            ret = launchJVM(
-                BaseAuthenticator.current.authData[@"username"] ?: @"Player",
-                self.jarPath,
-                windowWidth, windowHeight,
-                8
-            );
-        } else {
-            int minVersion = [self.metadata[@"javaVersion"][@"majorVersion"] intValue];
-            if (minVersion == 0) {
-                minVersion = [self.metadata[@"javaVersion"][@"version"] intValue];
-            }
-            ret = launchJVM(
-                BaseAuthenticator.current.authData[@"username"],
-                self.metadata,
-                windowWidth, windowHeight,
-                minVersion
-            );
+        int minVersion = [self.metadata[@"javaVersion"][@"majorVersion"] intValue];
+        if (minVersion == 0) {
+            minVersion = [self.metadata[@"javaVersion"][@"version"] intValue];
         }
-        dispatch_async(dispatch_get_main_queue(), ^{
-            UIKit_returnToSplitView();
-        });
+        launchJVM(
+            BaseAuthenticator.current.authData[@"username"],
+            self.metadata,
+            windowWidth, windowHeight,
+            minVersion
+        );
     });
 }
 

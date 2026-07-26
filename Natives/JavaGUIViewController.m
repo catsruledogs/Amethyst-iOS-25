@@ -6,7 +6,6 @@
 #import "PLLogOutputView.h"
 #import "TrackedTextField.h"
 #import "UnzipKit.h"
-#import "authenticator/BaseAuthenticator.h"
 #import "ios_uikit_bridge.h"
 #include "glfw_keycodes.h"
 #include "utils.h"
@@ -315,11 +314,8 @@ void AWTInputBridge_sendKey(int keycode) {
 
     
 dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        int version = self.requiredJavaVersion;
-        launchJVM(BaseAuthenticator.current.authData[@"username"] ?: @"Player", self.filepath, windowWidth, windowHeight, version);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            UIKit_returnToSplitView();
-        });
+        launchJVM(nil, self.filepath, windowWidth, windowHeight, _requiredJavaVersion);
+        _requiredJavaVersion = 0;
     });
 }
 

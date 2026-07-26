@@ -1,3 +1,4 @@
+#import "LauncherNavigationController.h"
 #import "LauncherPreferences.h"
 #import "LauncherPrefGameDirViewController.h"
 #import "NSFileManager+NRFileManager.h"

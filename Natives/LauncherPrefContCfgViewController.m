@@ -4,7 +4,7 @@
 #import "input/ControllerInput.h"
 #import "customcontrols/CustomControlsUtils.h"
 #import "FileListViewController.h"
-#import "MinecraftResourceUtils.h"
+#import "LauncherNavigationController.h"
 #import "LauncherPreferences.h"
 #import "LauncherPrefContCfgViewController.h"
 #import "PickTextField.h"
@@ -12,6 +12,8 @@
 #import "utils.h"
 
 #include "glfw_keycodes.h"
+
+#define contentNavigationController (LauncherNavigationController *)UIApplication.sharedApplication.keyWindow.rootViewController.splitViewController.viewControllers[1]
 
 typedef void(^CreateView)(UITableViewCell *, NSString *, NSDictionary *);
 

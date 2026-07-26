@@ -95,14 +95,6 @@
 				<string>amethyst</string>
 			</array>
 		</dict>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>org.angelauramc.amethyst.msal</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>ms-xal-00000000402b5328</string>
-			</array>
-		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1.0</string>

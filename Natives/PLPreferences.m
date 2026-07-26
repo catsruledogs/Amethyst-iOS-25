@@ -17,7 +17,6 @@
             @"check_sha": @YES,
             @"cosmetica": @YES,
             @"debug_logging": @(!CONFIG_RELEASE),
-            @"liquid_glass": @NO,
         }.mutableCopy,
         @"video": @{ // Video & Audio
             @"renderer": @"auto",
@@ -207,17 +206,6 @@
             pref[section][key] = value;
         }
     }
-
-    if (pref[@"java"] && pref[@"java"][@"allocated_memory"]) {
-        float currentMem = [pref[@"java"][@"allocated_memory"] floatValue];
-        if (currentMem < 256.0) {
-            CGFloat autoRatio = getEntitlementValue(@"com.apple.private.memorystatus") ? 0.4 : 0.25;
-            float correctMem = roundf((NSProcessInfo.processInfo.physicalMemory / 1048576) * autoRatio);
-            NSLog(@"[PLPreferences] Migrated allocated_memory from %.0f to %.0f", currentMem, correctMem);
-            pref[@"java"][@"allocated_memory"] = @(correctMem);
-        }
-    }
-
     return pref;
 }
 

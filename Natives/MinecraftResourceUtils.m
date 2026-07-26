@@ -1,13 +1,11 @@
 #include <CommonCrypto/CommonDigest.h>
 
 #import "authenticator/BaseAuthenticator.h"
+#import "LauncherNavigationController.h"
 #import "LauncherPreferences.h"
 #import "MinecraftResourceUtils.h"
 #import "ios_uikit_bridge.h"
 #import "utils.h"
-#import "AFNetworking.h"
-
-NSMutableArray<NSDictionary *> *localVersionList, *remoteVersionList;
 
 @implementation MinecraftResourceUtils
 
@@ -15,12 +13,11 @@ NSMutableArray<NSDictionary *> *localVersionList, *remoteVersionList;
 + (void)processVersion:(NSMutableDictionary *)json inheritsFrom:(NSMutableDictionary *)inheritsFrom {
     [self insertSafety:inheritsFrom from:json arr:@[
         @"assetIndex", @"assets", @"id",
+        @"inheritsFrom",
         @"mainClass", @"minecraftArguments",
         @"optifineLib", @"releaseTime", @"time", @"type"
     ]];
-    if (json[@"arguments"]) {
-        inheritsFrom[@"arguments"] = json[@"arguments"];
-    }
+    inheritsFrom[@"arguments"] = json[@"arguments"];
 
     for (NSMutableDictionary *lib in json[@"libraries"]) {
         NSString *libName = [lib[@"name"] substringToIndex:[lib[@"name"] rangeOfString:@":" options:NSBackwardsSearch].location];
@@ -72,7 +69,7 @@ NSMutableArray<NSDictionary *> *localVersionList, *remoteVersionList;
 
 + (void)tweakVersionJson:(NSMutableDictionary *)json {
     // Exclude some libraries
-    for (NSMutableDictionary *library in [json[@"libraries"] copy]) {
+    for (NSMutableDictionary *library in json[@"libraries"]) {
         library[@"skip"] = @(
             // Exclude platform-dependant libraries
             library[@"downloads"][@"classifiers"] != nil ||
@@ -81,9 +78,7 @@ NSMutableArray<NSDictionary *> *localVersionList, *remoteVersionList;
             [library[@"name"] hasPrefix:@"org.lwjgl"]
         );
 
-        NSArray *nameParts = [library[@"name"] componentsSeparatedByString:@":"];
-        if (nameParts.count < 3) continue;
-        NSString *versionStr = nameParts[2];
+        NSString *versionStr = [library[@"name"] componentsSeparatedByString:@":"][2];
         NSArray<NSString *> *version = [versionStr componentsSeparatedByString:@"."];
         if ([library[@"name"] hasPrefix:@"net.java.dev.jna:jna:"]) {
             // Special handling for LabyMod 1.8.9 and Forge 1.12.2(?)
@@ -110,36 +105,18 @@ NSMutableArray<NSDictionary *> *localVersionList, *remoteVersionList;
         }
     }
 
-    // Add the client as a library (skip if already present)
-    NSString *clientName = [NSString stringWithFormat:@"%@.jar", json[@"id"]];
-    BOOL clientExists = NO;
-    for (NSDictionary *lib in json[@"libraries"]) {
-        if ([lib[@"name"] isEqualToString:clientName]) {
-            clientExists = YES;
-            break;
-        }
-    }
-    if (!clientExists) {
-        NSMutableDictionary *client = [[NSMutableDictionary alloc] init];
-        client[@"downloads"] = [[NSMutableDictionary alloc] init];
-        client[@"name"] = clientName;
+    // Add the client as a library
+    NSMutableDictionary *client = [[NSMutableDictionary alloc] init];
+    client[@"downloads"] = [[NSMutableDictionary alloc] init];
+    if (json[@"downloads"][@"client"] == nil) {
         client[@"downloads"][@"artifact"] = [[NSMutableDictionary alloc] init];
-        client[@"downloads"][@"artifact"][@"path"] = [NSString stringWithFormat:@"../versions/%1$@/%1$@.jar", json[@"id"]];
-
-        // If jar already on disk (e.g. from modpack installer), don't overwrite with base's vanilla jar
-        NSString *gameDir = @(getenv("POJAV_GAME_DIR"));
-        NSString *jarPath = [NSString stringWithFormat:@"%@/versions/%@/%@.jar", gameDir, json[@"id"], json[@"id"]];
-        if ([NSFileManager.defaultManager fileExistsAtPath:jarPath]) {
-            client[@"skip"] = @YES;
-        } else if (json[@"downloads"][@"client"]) {
-            client[@"downloads"][@"artifact"][@"url"] = json[@"downloads"][@"client"][@"url"];
-            client[@"downloads"][@"artifact"][@"sha1"] = json[@"downloads"][@"client"][@"sha1"];
-            client[@"downloads"][@"artifact"][@"size"] = json[@"downloads"][@"client"][@"size"];
-        } else {
-            client[@"skip"] = @YES;
-        }
-        [json[@"libraries"] addObject:client];
+        client[@"skip"] = @YES;
+    } else {
+        client[@"downloads"][@"artifact"] = json[@"downloads"][@"client"];
     }
+    client[@"downloads"][@"artifact"][@"path"] = [NSString stringWithFormat:@"../versions/%1$@/%1$@.jar", json[@"id"]];
+    client[@"name"] = [NSString stringWithFormat:@"%@.jar", json[@"id"]];
+    [json[@"libraries"] addObject:client];
 
     // Parse Forge 1.17+ additional JVM Arguments
     if (json[@"inheritsFrom"] == nil || json[@"arguments"][@"jvm"] == nil) {
@@ -219,44 +196,6 @@ NSMutableArray<NSDictionary *> *localVersionList, *remoteVersionList;
 
     // No idea on handling everything else
     return nil;
-}
-
-+ (void)refreshLocalVersionList {
-    if (!localVersionList) {
-        localVersionList = [NSMutableArray new];
-    }
-    [localVersionList removeAllObjects];
-
-    NSFileManager *fileManager = NSFileManager.defaultManager;
-    NSString *versionPath = [NSString stringWithFormat:@"%s/versions/", getenv("POJAV_GAME_DIR")];
-    NSArray *list = [fileManager contentsOfDirectoryAtPath:versionPath error:nil];
-    for (NSString *versionId in list) {
-        NSString *localPath = [versionPath stringByAppendingPathComponent:versionId];
-        BOOL isDirectory;
-        [fileManager fileExistsAtPath:localPath isDirectory:&isDirectory];
-        if (!isDirectory) continue;
-        if ([versionId hasPrefix:@"."]) continue;
-        [localVersionList addObject:@{
-            @"id": versionId,
-            @"type": @"custom"
-        }];
-    }
-}
-
-+ (void)refreshRemoteVersionList {
-    remoteVersionList = @[
-        @{@"id": @"latest-release", @"type": @"release"},
-        @{@"id": @"latest-snapshot", @"type": @"snapshot"}
-    ].mutableCopy;
-
-    AFHTTPSessionManager *manager = [AFHTTPSessionManager manager];
-    [manager GET:@"https://piston-meta.mojang.com/mc/game/version_manifest_v2.json" parameters:nil headers:nil progress:nil success:^(NSURLSessionTask *task, NSDictionary *responseObject) {
-        [remoteVersionList addObjectsFromArray:responseObject[@"versions"]];
-        NSDebugLog(@"[VersionList] Got %d versions", remoteVersionList.count);
-        setPrefObject(@"internal.latest_version", responseObject[@"latest"]);
-    } failure:^(NSURLSessionTask *operation, NSError *error) {
-        NSDebugLog(@"[VersionList] Warning: Unable to fetch version list: %@", error.localizedDescription);
-    }];
 }
 
 @end

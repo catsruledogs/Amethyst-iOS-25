@@ -270,5 +270,5 @@ private:
 	std::string log;
 	bool failed = false;
 
-    void apply_optimizations(exec_list *vIr, bool linked, gl_shader_compiler_options *vCompilerFlags);
+    void apply_optimizations(exec_list *vIr, bool linked, gl_shader_compiler_options *vCompilerFlags, gl_shader_stage vShaderType);
 };

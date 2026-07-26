@@ -3,7 +3,7 @@
 #import "authenticator/BaseAuthenticator.h"
 #import "installer/modpack/ModpackAPI.h"
 #import "AFNetworking.h"
-#import "MinecraftResourceUtils.h"
+#import "LauncherNavigationController.h"
 #import "LauncherPreferences.h"
 #import "MinecraftResourceDownloadTask.h"
 #import "MinecraftResourceUtils.h"
@@ -25,18 +25,7 @@
     self.manager = [[AFURLSessionManager alloc] initWithSessionConfiguration:configuration];
     self.fileList = [NSMutableArray new];
     self.progressList = [NSMutableArray new];
-    self.progress = [NSProgress new];
-    self.progress.totalUnitCount = 1;
-    self.textProgress = [NSProgress new];
-    self.textProgress.kind = NSProgressKindFile;
-    self.textProgress.fileOperationKind = NSProgressFileOperationKindDownloading;
-    self.textProgress.totalUnitCount = -1;
     return self;
-}
-
-- (void)cancelAll {
-    [self.progress cancel];
-    [self.manager invalidateSessionCancelingTasks:YES resetSession:YES];
 }
 
 // Add file to the queue
@@ -57,9 +46,9 @@
     destination:^NSURL * _Nonnull(NSURL * _Nonnull targetPath, NSURLResponse * _Nonnull response) {
         NSLog(@"[MCDL] Downloading %@", name);
         progress = [self.manager downloadProgressForTask:task];
-        if (size == 0 && progress.totalUnitCount == 0 && task) {
-            NSUInteger actualSize = response.expectedContentLength > 0 ? response.expectedContentLength : 1;
-            progress.totalUnitCount = actualSize;
+        if (!size && task) {
+            [self addDownloadTaskToProgress:task size:response.expectedContentLength];
+            [self.fileList addObject:name];
         }
         [NSFileManager.defaultManager createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
         [NSFileManager.defaultManager removeItemAtPath:path error:nil];
@@ -77,10 +66,10 @@
         }
     }];
 
-    NSUInteger effectiveSize = size > 0 ? size : 1;
-    [self addDownloadTaskToProgress:task size:effectiveSize];
-    [self.manager downloadProgressForTask:task].localizedDescription = name;
-    [self.fileList addObject:name];
+    if (size && task) {
+        [self addDownloadTaskToProgress:task size:size];
+        [self.fileList addObject:name];
+    }
 
     return task;
 }
@@ -91,76 +80,15 @@
 
 - (void)addDownloadTaskToProgress:(NSURLSessionDownloadTask *)task size:(NSInteger)size {
     NSProgress *progress = [self.manager downloadProgressForTask:task];
-    NSUInteger fileSize = size > 0 ? (NSUInteger)size : 1;
+    NSUInteger fileSize = size>0 ? size : 1;
     progress.kind = NSProgressKindFile;
-    progress.totalUnitCount = fileSize;
+    if (size > 0) {
+        progress.totalUnitCount = fileSize;
+    }
     [self.progressList addObject:progress];
     [self.progress addChild:progress withPendingUnitCount:fileSize];
     self.progress.totalUnitCount += fileSize;
     self.textProgress.totalUnitCount = self.progress.totalUnitCount;
-}
-
-- (void)resolveFullInheritsChain {
-    NSMutableSet *seen = [NSMutableSet set];
-    NSString *currentId = self.metadata[@"id"];
-    while (self.metadata[@"inheritsFrom"]) {
-        [seen addObject:currentId];
-        NSString *parentId = self.metadata[@"inheritsFrom"];
-        if ([seen containsObject:parentId]) break;
-        currentId = parentId;
-        NSString *parentPath = [NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), parentId];
-        NSMutableDictionary *parentDict = parseJSONFromFile(parentPath);
-        if (parentDict[@"NSErrorObject"]) break;
-        [MinecraftResourceUtils processVersion:self.metadata inheritsFrom:parentDict];
-        self.metadata = parentDict;
-    }
-}
-
-- (void)ensureAncestorVersionsForJson:(NSMutableDictionary *)json completion:(void (^)())completion {
-    if (!json[@"inheritsFrom"]) {
-        completion();
-        return;
-    }
-
-    NSString *parentId = json[@"inheritsFrom"];
-    NSString *parentPath = [NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), parentId];
-
-    // Check if parent already exists on disk
-    NSMutableDictionary *parentJson = parseJSONFromFile(parentPath);
-    if (parentJson && !parentJson[@"NSErrorObject"]) {
-        // Parent exists; check further up the chain
-        [self ensureAncestorVersionsForJson:parentJson completion:completion];
-        return;
-    }
-
-    // Parent not on disk; look up in remote manifest
-    NSDictionary *remoteVersion = (id)[MinecraftResourceUtils findVersion:parentId inList:remoteVersionList];
-    if (remoteVersion) {
-        NSString *url = remoteVersion[@"url"];
-        NSString *sha = url.stringByDeletingLastPathComponent.lastPathComponent;
-        NSUInteger size = [remoteVersion[@"size"] unsignedLongLongValue];
-
-        __weak typeof(self) weakSelf = self;
-        NSURLSessionDownloadTask *task = [self createDownloadTask:url size:size sha:sha altName:nil toPath:parentPath success:^{
-            NSMutableDictionary *downloadedParent = parseJSONFromFile(parentPath);
-            if (downloadedParent && !downloadedParent[@"NSErrorObject"]) {
-                [weakSelf ensureAncestorVersionsForJson:downloadedParent completion:completion];
-            } else {
-                completion();
-            }
-        }];
-        [task resume];
-    } else {
-        // Parent not in remote manifest (e.g., mod loader profile like fabric-loader).
-        // Read from disk if it exists, otherwise just proceed.
-        NSMutableDictionary *existingParent = parseJSONFromFile(parentPath);
-        if (existingParent && !existingParent[@"NSErrorObject"]) {
-            [self ensureAncestorVersionsForJson:existingParent completion:completion];
-        } else {
-            NSLog(@"[MCDL] Warning: ancestor version %@ not found locally or remotely", parentId);
-            completion();
-        }
-    }
 }
 
 - (void)downloadVersionMetadata:(NSDictionary *)version success:(void (^)())success {
@@ -182,13 +110,14 @@
             [self finishDownloadWithErrorString:[self.metadata[@"NSErrorObject"] localizedDescription]];
             return;
         }
-
-        // Merge inheritsFrom chain for the in-memory copy (used by
-        // library/asset downloads). Do NOT write to disk — Java's own
-        // resolveInheritsChain will handle the JSON on disk.
-        [self resolveFullInheritsChain];
+        if (self.metadata[@"inheritsFrom"]) {
+            NSMutableDictionary *inheritsFromDict = parseJSONFromFile([NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), self.metadata[@"inheritsFrom"]]);
+            if (inheritsFromDict) {
+                [MinecraftResourceUtils processVersion:self.metadata inheritsFrom:inheritsFromDict];
+                self.metadata = inheritsFromDict;
+            }
+        }
         [MinecraftResourceUtils tweakVersionJson:self.metadata];
-
         success();
     };
 
@@ -199,10 +128,8 @@
             [self finishDownloadWithErrorString:[json[@"NSErrorObject"] localizedDescription]];
             return;
         } else if (json[@"inheritsFrom"]) {
-            // Ensure all ancestor versions in the inheritance chain exist on disk.
-            // This handles cases like modpack -> fabric-loader -> base MC version.
-            [self ensureAncestorVersionsForJson:json completion:completionBlock];
-            return;
+            version = (id)[MinecraftResourceUtils findVersion:json[@"inheritsFrom"] inList:remoteVersionList];
+            path = [NSString stringWithFormat:@"%1$s/versions/%2$@/%2$@.json", getenv("POJAV_GAME_DIR"), json[@"inheritsFrom"]];
         } else {
             completionBlock();
             return;
@@ -242,10 +169,6 @@
     NSMutableArray *tasks = [NSMutableArray new];
     for (NSDictionary *library in self.metadata[@"libraries"]) {
         NSString *name = library[@"name"];
-        if (![name isKindOfClass:[NSString class]] || name.length == 0) {
-            NSLog(@"[MDCL] Skipped library with invalid name: %@", name);
-            continue;
-        }
 
         NSMutableDictionary *artifact = library[@"downloads"][@"artifact"];
         if (artifact == nil && [name containsString:@":"]) {
@@ -258,7 +181,7 @@
             artifact[@"sha1"] = library[@"checksums"][0];
         }
 
-        NSString *path = [[NSString stringWithFormat:@"%s/libraries/%@", getenv("POJAV_GAME_DIR"), artifact[@"path"]] stringByStandardizingPath];
+        NSString *path = [NSString stringWithFormat:@"%s/libraries/%@", getenv("POJAV_GAME_DIR"), artifact[@"path"]];
         NSString *sha = artifact[@"sha1"];
         NSUInteger size = [artifact[@"size"] unsignedLongLongValue];
         NSString *url = artifact[@"url"];
@@ -326,10 +249,12 @@
             self.progress.totalUnitCount--;
             self.textProgress.totalUnitCount--;
             if (self.progress.totalUnitCount == 0) {
+                // We have nothing to download, invoke completion observer
                 self.progress.totalUnitCount = 1;
                 self.progress.completedUnitCount = 1;
                 self.textProgress.totalUnitCount = 1;
                 self.textProgress.completedUnitCount = 1;
+                return;
             }
             [libTasks makeObjectsPerformSelector:@selector(resume)];
             [assetTasks makeObjectsPerformSelector:@selector(resume)];
@@ -360,9 +285,16 @@
 #pragma mark - Utilities
 
 - (void)prepareForDownload {
+    // Create a fake progress which is used to update completedUnitCount properly
+    // (completedUnitCount does not update unless subprogress completes)
+    self.textProgress = [NSProgress new];
+    self.textProgress.kind = NSProgressKindFile;
+    self.textProgress.fileOperationKind = NSProgressFileOperationKindDownloading;
     self.textProgress.totalUnitCount = -1;
+
+    self.progress = [NSProgress new];
+    // Push 1 byte so it won't accidentally finish after downloading assets index
     self.progress.totalUnitCount = 1;
-    self.progress.completedUnitCount = 0;
     [self.fileList removeAllObjects];
     [self.progressList removeAllObjects];
 }

@@ -1,14 +1,11 @@
 #import "authenticator/BaseAuthenticator.h"
 #import "AppDelegate.h"
 #import "SceneDelegate.h"
+#import "LauncherNavigationController.h"
 #import "LauncherPreferences.h"
+#import "LauncherSplitViewController.h"
 #import "PLLogOutputView.h"
 #import "SurfaceViewController.h"
-#import "AmethystRootViewController.h"
-#import "MainCoordinator.h"
-#import "ThemeManager.h"
-#import "VersionDirectoryManager.h"
-#import "PLProfiles.h"
 
 #include <objc/runtime.h>
 #include "ios_uikit_bridge.h"
@@ -127,45 +124,19 @@ void UIKit_launchMinecraftSurfaceVC(UIWindow* window, NSDictionary* metadata) {
     });
 }
 
-void UIKit_launchJarFile(UIWindow* window, NSString* jarPath) {
-    setPrefObject(@"internal.selected_account", BaseAuthenticator.current.authData[@"username"]);
-
-    // Set up game directory so the jar runs in the profile's Minecraft environment
-    NSString *versionId = VersionDirectoryManager.shared.currentVersion;
-    if (versionId.length == 0) {
-        versionId = PLProfiles.current.selectedProfile[@"lastVersionId"];
-    }
-    if (versionId.length > 0) {
-        [VersionDirectoryManager.shared prepareGameDirectoryForVersion:versionId];
-        NSMutableDictionary *profile = PLProfiles.current.selectedProfile;
-        if (profile && [profile isKindOfClass:NSMutableDictionary.class]) {
-            profile[@"gameDir"] = [NSString stringWithFormat:@"versions/%@", versionId];
-            [PLProfiles.current save];
-        } else if (profile) {
-            NSMutableDictionary *mutableProfile = profile.mutableCopy;
-            mutableProfile[@"gameDir"] = [NSString stringWithFormat:@"versions/%@", versionId];
-            PLProfiles.current.profiles[PLProfiles.current.selectedProfileName] = mutableProfile;
-            [PLProfiles.current save];
-        }
-    }
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        tmpRootVC = window.rootViewController;
-        [UIView animateWithDuration:0.2 animations:^{
-            window.alpha = 0;
-        } completion:^(BOOL b){
-            [window resignKeyWindow];
-            window.alpha = 1;
-            window.rootViewController = [[SurfaceViewController alloc] initWithJarPath:jarPath];
-            [window makeKeyAndVisible];
-        }];
-    });
-}
-
 void UIKit_returnToSplitView() {
+    // Researching memory-safe ways to return from SurfaceViewController to the split view
+    // so that the app doesn't close when quitting the game (similar behaviour to Android)
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *window = UIWindow.mainWindow;
 
+        // Return from JavaGUIViewController
+        if ([window.rootViewController isKindOfClass:LauncherSplitViewController.class]) {
+            [currentVC() dismissViewControllerAnimated:YES completion:nil];
+            return;
+        }
+
+        // Return from SurfaceViewController
         [UIView animateWithDuration:0.2 animations:^{
             window.alpha = 0;
         } completion:^(BOOL b){
@@ -175,10 +146,7 @@ void UIKit_returnToSplitView() {
                 window.rootViewController = tmpRootVC;
                 tmpRootVC = nil;
             } else {
-                AmethystRootViewController *rootVC = [[AmethystRootViewController alloc] init];
-                MainCoordinator *coordinator = [[MainCoordinator alloc] initWithRootVC:rootVC];
-                rootVC.coordinator = coordinator;
-                window.rootViewController = rootVC;
+                window.rootViewController = [[LauncherSplitViewController alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
             }
             [window makeKeyAndVisible];
         }];
@@ -186,10 +154,12 @@ void UIKit_returnToSplitView() {
 }
 
 void launchInitialViewController(UIWindow *window) {
-    AmethystRootViewController *rootVC = [[AmethystRootViewController alloc] init];
-    MainCoordinator *coordinator = [[MainCoordinator alloc] initWithRootVC:rootVC];
-    rootVC.coordinator = coordinator;
-    window.rootViewController = rootVC;
-    [window makeKeyAndVisible];
-    [ThemeManager.shared applyThemeToAllWindows];
+    window.rootViewController = [[LauncherSplitViewController alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
+#if 0
+    if (getPrefBool(@"internal.internal_launch_on_boot")) {
+        window.rootViewController = [[SurfaceViewController alloc] init];
+    } else {
+        window.rootViewController = [[LauncherSplitViewController alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
+    }
+#endif
 }

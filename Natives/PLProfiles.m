@@ -11,12 +11,12 @@ static PLProfiles* current;
 
 + (id)defaultProfiles {
     return @{
-        @"profiles": [@{
+        @"profiles": @{
             @"(Default)": @{
                 @"name": @"(Default)",
                 @"lastVersionId": @"latest-release"
             }
-        } mutableCopy],
+        },
         @"selectedProfile": @"(Default)"
     }.mutableCopy;
 }
@@ -51,8 +51,7 @@ static PLProfiles* current;
         @"defaultTouchCtrl": @"control.default_ctrl",
         @"defaultGamepadCtrl": @"control.default_gamepad_ctrl",
         @"javaArgs": @"java.java_args",
-        @"renderer": @"video.renderer",
-        @"lwjglVersion": @"java.lwjgl_version"
+        @"renderer": @"video.renderer"
     };
     return getPrefObject(prefDefaults[key]);
 }
@@ -63,7 +62,7 @@ static PLProfiles* current;
 
 - (id)initWithCurrentInstance {
     self = [super init];
-    self.profilePath = [[NSString stringWithUTF8String:getenv("POJAV_GAME_DIR")] stringByAppendingPathComponent:@"launcher_profiles.json"];
+    self.profilePath = [@(getenv("POJAV_GAME_DIR")) stringByAppendingPathComponent:@"launcher_profiles.json"];
     self.profileDict = parseJSONFromFile(self.profilePath);
     if (self.profileDict[@"NSErrorObject"]) {
         self.profileDict = PLProfiles.defaultProfiles;
@@ -74,12 +73,7 @@ static PLProfiles* current;
 }
 
 - (id)profiles {
-    id profiles = self.profileDict[@"profiles"];
-    if (profiles && ![profiles isKindOfClass:[NSMutableDictionary class]]) {
-        profiles = [profiles mutableCopy];
-        self.profileDict[@"profiles"] = profiles;
-    }
-    return profiles;
+    return self.profileDict[@"profiles"];
 }
 
 - (id)selectedProfile {

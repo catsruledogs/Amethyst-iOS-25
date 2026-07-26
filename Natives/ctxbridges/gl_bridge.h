@@ -23,7 +23,6 @@ typedef struct {
     PFNEGLSWAPBUFFERSPROC eglSwapBuffers;
     PFNEGLSWAPINTERVALPROC eglSwapInterval;
     PFNEGLTERMINATEPROC eglTerminate;
-    void* (*eglGetProcAddress)(const char*);
 } egl_library;
 
 typedef struct {

@@ -1,6 +1,6 @@
 #import "CustomControlsViewController.h"
 #import "LauncherPreferences.h"
-#import "SettingsViewController.h"
+#import "LauncherPreferencesViewController.h"
 #import "PLProfiles.h"
 #import "SurfaceViewController.h"
 #import "utils.h"
@@ -148,7 +148,7 @@ static CGPoint lastCenterPoint;
 }
 
 - (void)actionOpenPreferences {
-    SettingsViewController *vc = [[SettingsViewController alloc] init];
+    LauncherPreferencesViewController *vc = [[LauncherPreferencesViewController alloc] init];
     [self presentViewController:vc animated:YES completion:nil];
 }
 

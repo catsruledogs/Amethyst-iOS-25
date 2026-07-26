@@ -268,7 +268,6 @@ native: dep_mg
 		-DCMAKE_OSX_ARCHITECTURES=arm64 \
 		-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
 		-DCMAKE_C_FLAGS="-arch arm64" \
-		-DCMAKE_MAKE_PROGRAM=/usr/bin/make \
 		-DCONFIG_BRANCH="$(BRANCH)" \
 		-DCONFIG_COMMIT="$(COMMIT)" \
 		-DCONFIG_RELEASE=$(RELEASE) \
@@ -276,7 +275,7 @@ native: dep_mg
 
 	cmake --build $(WORKINGDIR) --config $(CMAKE_BUILD_TYPE) -j$(JOBS)
 	#	--target awt_headless awt_xawt libOSMesaOverride.dylib tinygl4angle AngelAuraAmethyst
-	-rm -f $(WORKINGDIR)/libawt_headless.dylib
+	rm $(WORKINGDIR)/libawt_headless.dylib
 	echo '[Amethyst v$(VERSION)] native - end'
 
 java:
@@ -317,7 +316,6 @@ jre: native
 		-DCMAKE_OSX_ARCHITECTURES=arm64 \
 		-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
 		-DCMAKE_C_FLAGS="-arch arm64" \
-		-DCMAKE_MAKE_PROGRAM=/usr/bin/make \
 		-DSPIRV_CROSS_SHARED="ON" \
 $(SOURCEDIR)/Natives/external/MobileGlues/src/main/cpp/
 
@@ -350,10 +348,7 @@ payload: native dep_mg java jre assets
 	cp -R $(SOURCEDIR)/Natives/resources/* $(WORKINGDIR)/AngelAuraAmethyst.app/ || exit 1
 	cp $(WORKINGDIR)/*.dylib $(WORKINGDIR)/AngelAuraAmethyst.app/Frameworks/ || exit 1
 	cp -R $(SOURCEDIR)/JavaApp/libs/others/* $(WORKINGDIR)/AngelAuraAmethyst.app/libs/ || exit 1
-	cp $(SOURCEDIR)/JavaApp/build/launcher.jar $(SOURCEDIR)/JavaApp/build/patchjna_agent.jar $(SOURCEDIR)/JavaApp/build/cacio-init-agent.jar $(WORKINGDIR)/AngelAuraAmethyst.app/libs/ || exit 1
-	mkdir -p $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl33 $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl41
-	cp $(SOURCEDIR)/JavaApp/build/lwjgl-3.3.3.jar $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl33/lwjgl.jar || exit 1
-	cp $(SOURCEDIR)/JavaApp/build/lwjgl-3.4.1.jar $(WORKINGDIR)/AngelAuraAmethyst.app/libs/lwjgl41/lwjgl.jar || exit 1
+	cp $(SOURCEDIR)/JavaApp/build/*.jar $(WORKINGDIR)/AngelAuraAmethyst.app/libs/ || exit 1
 	cp -R $(SOURCEDIR)/JavaApp/libs/caciocavallo/* $(WORKINGDIR)/AngelAuraAmethyst.app/libs_caciocavallo || exit 1
 	cp -R $(SOURCEDIR)/JavaApp/libs/caciocavallo17/* $(WORKINGDIR)/AngelAuraAmethyst.app/libs_caciocavallo17 || exit 1
 	$(call METHOD_DIRCHECK,$(OUTPUTDIR)/Payload)

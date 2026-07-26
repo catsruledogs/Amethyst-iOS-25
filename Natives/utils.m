@@ -97,17 +97,18 @@ NSError* saveJSONToFile(NSDictionary *dict, NSString *path) {
 
 NSString* localize(NSString* key, NSString* comment) {
     if (!key) return @"";
-    NSString *value = [[NSBundle mainBundle] localizedStringForKey:key value:key table:nil];
+    NSString *value = NSLocalizedString(key, nil);
+    if (!value) value = @"";
     if (![NSLocale.preferredLanguages[0] isEqualToString:@"en"] && [value isEqualToString:key]) {
         NSString* path = [NSBundle.mainBundle pathForResource:@"en" ofType:@"lproj"];
         NSBundle* languageBundle = [NSBundle bundleWithPath:path];
-        value = [languageBundle localizedStringForKey:key value:key table:nil];
+        value = [languageBundle localizedStringForKey:key value:@"" table:nil];
         if (!value || [value isEqualToString:key]) {
-            value = [[NSBundle bundleWithIdentifier:@"com.apple.UIKit"] localizedStringForKey:key value:key table:nil];
+            value = [[NSBundle bundleWithIdentifier:@"com.apple.UIKit"] localizedStringForKey:key value:@"" table:nil];
         }
     }
 
-    return value ?: key;
+    return value ?: @"";
 }
 
 void customNSLog(const char *file, int lineNumber, const char *functionName, NSString *format, ...)
@@ -229,7 +230,6 @@ JITFlags DeviceGetJITFlags(BOOL refresh) {
         
         if (@available(iOS 26.0, *)) {
             cachedFlags |= JIT_FLAG_IS_IOS_26;
-            // iOS 27 beta continues the same JIT model as iOS 26
             if (!DeviceCanCreateRXMap()) {
                 cachedFlags |= JIT_FLAG_FORCE_MIRRORED;
             }

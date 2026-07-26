@@ -59,6 +59,9 @@ bool do_tree_grafting(exec_list *instructions);
 bool do_vec_index_to_cond_assign(exec_list *instructions);
 bool lower_discard(exec_list *instructions);
 void lower_discard_flow(exec_list *instructions);
+bool lower_variable_index_to_cond_assign(gl_shader_stage stage,
+                                         exec_list *instructions, bool lower_input, bool lower_output,
+                                         bool lower_temp, bool lower_uniform);
 bool lower_instructions(exec_list *instructions,
                         bool have_dround,
                         bool have_gpu_shader5);

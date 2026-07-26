@@ -15,7 +15,7 @@ typedef void(^XSTSCallback)(NSString *xsts, NSString *uhs);
         @"client_id": @"00000000402b5328",
         (refresh ? @"refresh_token" : @"code"): authcode,
         @"grant_type": refresh ? @"refresh_token" : @"authorization_code",
-        @"redirect_uri": @"https://login.live.com/oauth20_desktop.srf",
+        @"redirect_url": @"https://login.live.com/oauth20_desktop.srf",
         @"scope": @"service::user.auth.xboxlive.com::MBI_SSL"
     };
 

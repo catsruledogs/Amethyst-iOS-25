@@ -30,7 +30,8 @@ public class UIKit {
     }
 
     public static void callback_JavaGUIViewController_launchJarFile(final String filepath, String[] args) throws Throwable {
-        System.out.println("[JarLauncher] Launching JAR: " + filepath);
+        // Launch the JAR file
+        String mainClassName = null;
 
         JarFile jarfile = new JarFile(filepath);
         String mainClass = jarfile.getManifest().getMainAttributes().getValue("Main-Class");
@@ -38,34 +39,13 @@ public class UIKit {
         if (mainClass == null) {
             throw new IllegalArgumentException("no main manifest attribute, in \"" + filepath + "\"");
         }
-        System.out.println("[JarLauncher] Main class: " + mainClass);
-
-        // Ensure user.home/Library/Application Support/minecraft exists (needed by OptiFine, Forge installers, etc.)
-        String userHome = System.getProperty("user.home", ".");
-        File mcDir = new File(userHome, "Library/Application Support/minecraft");
-        if (!mcDir.exists()) {
-            System.out.println("[JarLauncher] Creating " + mcDir.getAbsolutePath());
-            mcDir.mkdirs();
-        } else {
-            System.out.println("[JarLauncher] " + mcDir.getAbsolutePath() + " already exists");
-        }
-        // Also create the user.dir working directory
-        String userDir = System.getProperty("user.dir", ".");
-        File workDir = new File(userDir);
-        if (!workDir.exists()) {
-            System.out.println("[JarLauncher] Creating " + workDir.getAbsolutePath());
-            workDir.mkdirs();
-        }
 
         // LabyMod Installer uses FlatLAF which has some macOS-specific codes, so we make it think it's running on Linux.
         patch_FlatLAF_setLinux();
 
-        System.out.println("[JarLauncher] Loading class " + mainClass);
         Class<?> clazz = ClassLoader.getSystemClassLoader().loadClass(mainClass);
         Method method = clazz.getMethod("main", String[].class);
-        System.out.println("[JarLauncher] Invoking main()");
         method.invoke(null, new Object[]{args});
-        System.out.println("[JarLauncher] main() returned");
     }
 
     public static void updateMCGuiScale() {

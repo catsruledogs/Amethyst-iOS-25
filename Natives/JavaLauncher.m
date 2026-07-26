@@ -20,7 +20,6 @@
 #import "LauncherPreferences.h"
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
-#import "VersionDirectoryManager.h"
 
 #define fm NSFileManager.defaultManager
 
@@ -231,49 +230,51 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         NSLog(@"[DyldLVBypass] Hook disabled! Loading unsigned dylib will cause code signature error.");
     }
 
-    BOOL launchJar = ![launchTarget isKindOfClass:NSDictionary.class];
+    BOOL launchJar = NO;
     NSString *gameDir;
     NSString *defaultJRETag;
-
-    // Get preferred Java version from current profile
-    int preferredJavaVersion = [PLProfiles resolveKeyForCurrentProfile:@"javaVersion"].intValue;
-    if (preferredJavaVersion > 0) {
-        if (minVersion > preferredJavaVersion) {
-            NSLog(@"[JavaLauncher] Profile's preferred Java version (%d) does not meet the minimum version (%d), dropping request", preferredJavaVersion, minVersion);
-        } else {
-            NSDebugLog(@"[PLProfiles] Applying javaVersion");
-            minVersion = preferredJavaVersion;
+    NSCAssert(launchTarget, @"Unexpected nil launchTarget");
+    if ([launchTarget isKindOfClass:NSDictionary.class]) {
+        // Get preferred Java version from current profile
+        int preferredJavaVersion = [PLProfiles resolveKeyForCurrentProfile:@"javaVersion"].intValue;
+        if (preferredJavaVersion > 0) {
+            if (minVersion > preferredJavaVersion) {
+                NSLog(@"[JavaLauncher] Profile's preferred Java version (%d) does not meet the minimum version (%d), dropping request", preferredJavaVersion, minVersion);
+            } else {
+                NSDebugLog(@"[PLProfiles] Applying javaVersion");
+                minVersion = preferredJavaVersion;
+            }
         }
-    }
-    if (launchJar) {
-        defaultJRETag = @"execute_jar";
-        // Create expected directory for OptiFine and other installers
-        NSString *mcSupportDir = [NSString stringWithFormat:@"%s/Library/Application Support/minecraft", getenv("POJAV_HOME")];
-        [fm createDirectoryAtPath:mcSupportDir withIntermediateDirectories:YES attributes:nil error:nil];
-    } else if (minVersion <= 8) {
-        defaultJRETag = @"1_16_5_older";
+        if (minVersion <= 8) {
+            defaultJRETag = @"1_16_5_older";
+        } else {
+            defaultJRETag = @"1_17_newer";
+        }
+
+        // Setup AMETHYST_RENDERER
+        NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
+        NSLog(@"[JavaLauncher] RENDERER is set to %@\n", renderer);
+        setenv("AMETHYST_RENDERER", renderer.UTF8String, 1);
+
+        // Apply Zink-specific environment variables if Zink renderer is selected
+        if ([renderer hasPrefix:@"libOSMesa"]) {
+            [ZinkConfig applyZinkEnvironmentFromPreferences];
+            // Show active config summary as a console-readable env var + log
+            NSString *configSummary = [ZinkConfig activeConfigSummary];
+            NSLog(@"[ZinkConfig] ========== Zink Renderer Active ==========");
+            NSLog(@"[ZinkConfig] %@", configSummary);
+            setenv("ZINK_ACTIVE_CONFIG", configSummary.UTF8String, 1);
+        }
+        // Setup gameDir
+        gameDir = [NSString stringWithFormat:@"%s/instances/%@/%@",
+            getenv("POJAV_HOME"), getPrefObject(@"general.game_directory"),
+            [PLProfiles resolveKeyForCurrentProfile:@"gameDir"]]
+            .stringByStandardizingPath;
     } else {
-        defaultJRETag = @"1_17_newer";
+        defaultJRETag = @"execute_jar";
+        gameDir = @(getenv("POJAV_GAME_DIR"));
+        launchJar = YES;
     }
-
-    // Setup AMETHYST_RENDERER
-    NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
-    NSLog(@"[JavaLauncher] RENDERER is set to %@\n", renderer);
-    setenv("AMETHYST_RENDERER", renderer.UTF8String, 1);
-
-    // Apply Zink-specific environment variables if Zink renderer is selected
-    if ([renderer hasPrefix:@"libOSMesa"]) {
-        [ZinkConfig applyZinkEnvironmentFromPreferences];
-        NSString *configSummary = [ZinkConfig activeConfigSummary];
-        NSLog(@"[ZinkConfig] ========== Zink Renderer Active ==========");
-        NSLog(@"[ZinkConfig] %@", configSummary);
-        setenv("ZINK_ACTIVE_CONFIG", configSummary.UTF8String, 1);
-    }
-    // Setup gameDir
-    gameDir = [NSString stringWithFormat:@"%s/instances/%@/%@",
-        getenv("POJAV_HOME"), getPrefObject(@"general.game_directory"),
-        [PLProfiles resolveKeyForCurrentProfile:@"gameDir"]]
-        .stringByStandardizingPath;
     NSLog(@"[JavaLauncher] Looking for Java %d or later", minVersion);
     NSString *javaHome = getSelectedJavaHome(defaultJRETag, minVersion);
 
@@ -300,7 +301,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     int allocmem;
     if (getPrefBool(@"java.auto_ram")) {
         CGFloat autoRatio = getEntitlementValue(@"com.apple.private.memorystatus") ? 0.4 : 0.25;
-        allocmem = roundf((NSProcessInfo.processInfo.physicalMemory / 1048576) * autoRatio);
+        allocmem = roundf((NSProcessInfo.processInfo.physicalMemory >> 20) * autoRatio);
     } else {
         allocmem = getPrefInt(@"java.allocated_memory");
     }
@@ -387,7 +388,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-Dorg.lwjgl.spvc.libname=spirv-cross-c-shared.0";
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
-    margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/cacio-init-agent.jar=", librariesPath].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", librariesPath].UTF8String;
     if(getPrefBool(@"general.cosmetica")) {
         margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/arc_dns_injector.jar=23.95.137.176", librariesPath].UTF8String;
@@ -405,10 +405,16 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-XX:ParallelGCThreads=2";
 
     // On iOS 26+, use mirror mapped JIT for better code cache performance.
-    // JDK 25 (jre25-ios-v10+) has the mirror_mapping HotSpot patch applied,
-    // so MirrorMappedCodeCache works correctly. Enable for all Java versions.
+    // JDK 25 (jre25-ios-v1) has a bug in MirrorMappedCodeCache that causes
+    // SIGBUS in ScavengableNMethods::register_nmethod during JIT compilation.
+    // jre25-ios-v2 is supposed to fix this, but keep the flag off for Java 25
+    // until v2 is confirmed stable across all devices.
+    NSString *currentJavaHome = [NSString stringWithUTF8String:getenv("JAVA_HOME") ?: ""];
+    BOOL isJava25Home = [currentJavaHome containsString:@"java-25"];
     if (@available(iOS 26.0, *)) {
-        margv[++margc] = "-XX:+MirrorMappedCodeCache";
+        if (!isJava25Home) {
+            margv[++margc] = "-XX:+MirrorMappedCodeCache";
+        }
     }
 
     // Disable Forge 1.16.x early progress window
@@ -499,26 +505,25 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     init_loadCustomJvmFlags(&margc, (const char **)margv);
     NSLog(@"[Init] Found JLI lib");
 
-    NSString *lwjglVersion = [VersionDirectoryManager resolveEffectiveLwjglVersion];
-    NSString *lwjglJarPath;
-    if ([lwjglVersion isEqualToString:@"3.4.1"]) {
-        lwjglJarPath = [librariesPath stringByAppendingPathComponent:@"lwjgl41/lwjgl.jar"];
-    } else {
-        lwjglJarPath = [librariesPath stringByAppendingPathComponent:@"lwjgl33/lwjgl.jar"];
-    }
-    setenv("LWJGL_VERSION", lwjglVersion.UTF8String, 1);
-
-    NSString *classpath = [NSString stringWithFormat:@"%@/*:%@", librariesPath, lwjglJarPath];
+    NSString *classpath = [NSString stringWithFormat:@"%@/*", librariesPath];
     if (launchJar) {
         classpath = [classpath stringByAppendingFormat:@":%@", launchTarget];
-        margv[++margc] = [NSString stringWithFormat:@"-Dpojav.runJar=%@", launchTarget].UTF8String;
     }
     margv[++margc] = "-cp";
     margv[++margc] = classpath.UTF8String;
     margv[++margc] = "net.kdt.pojavlaunch.PojavLauncher";
 
-    margv[++margc] = (username ?: @"").UTF8String;
-    margv[++margc] = (VersionDirectoryManager.shared.currentVersion ?: @"").UTF8String;
+    if (launchJar) {
+        margv[++margc] = "-jar";
+    } else {
+        margv[++margc] = username.UTF8String;
+    }
+
+    if ([launchTarget isKindOfClass:NSDictionary.class]) {
+        margv[++margc] = [launchTarget[@"id"] UTF8String];
+    } else {
+        margv[++margc] = [launchTarget UTF8String];
+    }
     //margv[++margc] = "ghidra.GhidraRun";
 
     pJLI_Launch = (JLI_Launch_func *)dlsym(libjli, "JLI_Launch");

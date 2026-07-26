@@ -212,27 +212,9 @@ void registerOpenHandler(JNIEnv *env) {
 
 // JNI_OnLoad
 void JNI_OnLoadGLFW() {
-    jclass glfwClass = (*runtimeJNIEnvPtr)->FindClass(runtimeJNIEnvPtr, "org/lwjgl/glfw/GLFW");
-    if (glfwClass == NULL) {
-        if ((*runtimeJNIEnvPtr)->ExceptionCheck(runtimeJNIEnvPtr)) {
-            (*runtimeJNIEnvPtr)->ExceptionClear(runtimeJNIEnvPtr);
-        }
-        return;
-    }
-    vmGlfwClass = (*runtimeJNIEnvPtr)->NewGlobalRef(runtimeJNIEnvPtr, glfwClass);
+    vmGlfwClass = (*runtimeJNIEnvPtr)->NewGlobalRef(runtimeJNIEnvPtr, (*runtimeJNIEnvPtr)->FindClass(runtimeJNIEnvPtr, "org/lwjgl/glfw/GLFW"));
     method_internalWindowSizeChanged = (*runtimeJNIEnvPtr)->GetStaticMethodID(runtimeJNIEnvPtr, vmGlfwClass, "internalWindowSizeChanged", "(JII)V");
-    if (method_internalWindowSizeChanged == NULL) {
-        if ((*runtimeJNIEnvPtr)->ExceptionCheck(runtimeJNIEnvPtr)) {
-            (*runtimeJNIEnvPtr)->ExceptionClear(runtimeJNIEnvPtr);
-        }
-    }
     jfieldID field_keyDownBuffer = (*runtimeJNIEnvPtr)->GetStaticFieldID(runtimeJNIEnvPtr, vmGlfwClass, "keyDownBuffer", "Ljava/nio/ByteBuffer;");
-    if (field_keyDownBuffer == NULL) {
-        if ((*runtimeJNIEnvPtr)->ExceptionCheck(runtimeJNIEnvPtr)) {
-            (*runtimeJNIEnvPtr)->ExceptionClear(runtimeJNIEnvPtr);
-        }
-        return;
-    }
     jobject keyDownBufferJ = (*runtimeJNIEnvPtr)->GetStaticObjectField(runtimeJNIEnvPtr, vmGlfwClass, field_keyDownBuffer);
     keyDownBuffer = (*runtimeJNIEnvPtr)->GetDirectBufferAddress(runtimeJNIEnvPtr, keyDownBufferJ);
 }
@@ -279,9 +261,7 @@ ADD_CALLBACK_WWIN(WindowSize)
 void handleFramebufferSizeJava(void* window, int w, int h) {
     if(GLFW_invoke_CursorEnter)GLFW_invoke_CursorEnter(window, 1);
     if(GLFW_invoke_WindowPos)GLFW_invoke_WindowPos(window, 0, 0);
-    if (vmGlfwClass != NULL && method_internalWindowSizeChanged != NULL) {
-        (*runtimeJNIEnvPtr)->CallStaticVoidMethod(runtimeJNIEnvPtr, vmGlfwClass, method_internalWindowSizeChanged, (long)window, w, h);
-    }
+    (*runtimeJNIEnvPtr)->CallStaticVoidMethod(runtimeJNIEnvPtr, vmGlfwClass, method_internalWindowSizeChanged, (long)window, w, h);
 }
 
 void pojavPumpEvents(void* window) {

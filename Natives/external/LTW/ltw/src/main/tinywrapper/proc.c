@@ -2,11 +2,15 @@
  * Created by: artDev
  * Copyright (c) 2025 artDev, SerpentSpirale, CADIndie.
  * For use under LGPL-3.0
+ *
+ * iOS port: replaced Android-specific EGL loading with RTLD_DEFAULT lookup
+ * to work with ANGLE EGL framework loaded by the bridge.
  */
 #include <EGL/egl.h>
 #include <GLES3/gl31.h>
 #include <dlfcn.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include "proc.h"
 #include "egl.h"
@@ -19,12 +23,12 @@ INTERNAL eglMustCastToProperFunctionPointerType (*host_eglGetProcAddress)(const 
 INTERNAL es3_functions_t es3_functions;
 
 static void error_sysegl() {
-    fprintf(stderr, "LTWInit: Failed to load system EGL: %s", dlerror());
+    fprintf(stderr, "LTWInit: Failed to load system EGL: %s\n", dlerror());
     abort();
 }
 
 static void error_init(const char* functionName) {
-    fprintf(stderr, "LTWInit: Failed to load function \"%s\"", functionName);
+    fprintf(stderr, "LTWInit: Failed to load function \"%s\"\n", functionName);
     abort();
 }
 
@@ -37,31 +41,44 @@ static void init_es3_proc() {
 #undef GLESFUNC
 }
 
-__attribute__((constructor, used, visibility("default"))) void proc_init(){
-    const char* systemEglPath = "@rpath/libtinygl4angle.dylib";
-    const char* eglPath = getenv("LIBGL_EGL") != NULL ? getenv("LIBGL_EGL") : systemEglPath;
-    int flags = RTLD_LAZY | RTLD_LOCAL;
-    void* eglHandle = dlopen(eglPath, flags);
-    if(eglHandle == NULL){
-        printf("LTWInit: failed loading custom libEGL, using default\n");
-        eglHandle = dlopen(systemEglPath, flags);
-        if(eglHandle == NULL)
-            error_sysegl();
+__attribute__((constructor, used)) void proc_init(){
+    // On iOS, ANGLE EGL is pre-loaded by the bridge. Get the real eglGetProcAddress
+    // from ANGLE's dylib explicitly, avoiding our own exported eglGetProcAddress.
+    void* angleHandle = dlopen("@rpath/libtinygl4angle.dylib", RTLD_LAZY | RTLD_LOCAL);
+    if (angleHandle != NULL) {
+        host_eglGetProcAddress = dlsym(angleHandle, "eglGetProcAddress");
     }
-    host_eglGetProcAddress = dlsym(eglHandle, "eglGetProcAddress");
+    // Fall back to RTLD_DEFAULT for non-iOS platforms.
+    if (host_eglGetProcAddress == NULL) {
+        host_eglGetProcAddress = dlsym(RTLD_DEFAULT, "eglGetProcAddress");
+    }
+    if (host_eglGetProcAddress == NULL) {
+        // Android/Linux path: try dlopen on system EGL
+        const char* systemEglPath = "libEGL.so";
+        const char* eglPath = getenv("LIBGL_EGL") != NULL ? getenv("LIBGL_EGL") : systemEglPath;
+        int flags = RTLD_LAZY | RTLD_LOCAL;
+        void* eglHandle = dlopen(eglPath, flags);
+        if(eglHandle == NULL){
+            printf("LTWInit: failed loading custom libEGL, using default\n");
+            eglHandle = dlopen(systemEglPath, flags);
+            if(eglHandle == NULL)
+                error_sysegl();
+        }
+        host_eglGetProcAddress = dlsym(eglHandle, "eglGetProcAddress");
+    }
     if(host_eglGetProcAddress == NULL) error_sysegl();
     init_egl();
     init_es3_proc();
 }
 
 // This is exported for it to be automatically picked up by LWJGL's symbol resolver.
-__attribute__((used, visibility("default"))) eglMustCastToProperFunctionPointerType glXGetProcAddress(const char *procname) {
+__attribute__((used)) eglMustCastToProperFunctionPointerType glXGetProcAddress(const char *procname) {
     return eglGetProcAddress(procname);
 }
 
 extern void* resolve_stub(const char* procname);
 
-__attribute__((used, visibility("default"))) eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *procname) {
+eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *procname) {
     // EGL functions that we implement.
     // All of the other platform EGL functions will be redirected into Android's default EGL implementation.
     if(!strncmp(procname, "egl", 3)) {
@@ -73,7 +90,7 @@ __attribute__((used, visibility("default"))) eglMustCastToProperFunctionPointerT
     if(strncmp(procname, "gl", 2) != 0) goto fallback;
 #define GLESOVERRIDE(name)                                        \
     if(!strcmp(procname, #name)) {                                \
-        fprintf(stderr, "LTW: Overridden %s\n", #name);                        \
+        printf("LTW: Overridden %s\n", #name);                        \
         return (eglMustCastToProperFunctionPointerType) name;     \
     }
 #include "es3_overrides.h"

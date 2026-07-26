@@ -107,64 +107,6 @@ extern "C" {
 #define OSMESA_CONTEXT_MAJOR_VERSION 0x36
 #define OSMESA_CONTEXT_MINOR_VERSION 0x37
 
-struct st_framebuffer_iface;
-struct st_visual;
-struct pipe_context;
-struct pipe_resource;
-struct pipe_screen;
-struct pp_queue_t;
-
-struct st_manager
-{
-   struct pipe_screen *screen;
-};
-
-struct st_context_iface
-{
-   struct pipe_context *pipe;
-   void *st_context_private;
-};
-
-struct osmesa_buffer
-{
-   struct st_framebuffer_iface *stfb;
-   // struct st_visual visual;
-   unsigned width, height;
-
-   // struct pipe_resource *textures[ST_ATTACHMENT_COUNT];
-
-   void *map;
-
-   struct osmesa_buffer *next;  /**< next in linked list */
-};
-
-struct osmesa_context
-{
-   struct st_context_iface *stctx;
-
-   // boolean ever_used;     /*< Has this context ever been current? */
-
-   struct osmesa_buffer *current_buffer;
-
-   /* Storage for depth/stencil, if the user has requested access.  The backing
-    * driver always has its own storage for the actual depth/stencil, which we
-    * have to transfer in and out.
-    */
-   void *zs;
-   unsigned zs_stride;
-
-   // enum pipe_format depth_stencil_format, accum_format;
-
-   GLenum format;         /*< User-specified context format */
-   GLenum type;           /*< Buffer's data type */
-   GLint user_row_length; /*< user-specified number of pixels per row */
-   GLboolean y_up;        /*< TRUE  -> Y increases upward */
-                          /*< FALSE -> Y increases downward */
-
-   /** Which postprocessing filters are enabled. */
-   // unsigned pp_enabled[PP_FILTERS];
-   struct pp_queue_t *pp;
-};
 
 typedef struct osmesa_context *OSMesaContext;
 
