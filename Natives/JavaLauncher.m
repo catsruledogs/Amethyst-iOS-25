@@ -20,6 +20,7 @@
 #import "LauncherPreferences.h"
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
+#import "VersionDirectoryManager.h"
 
 #define fm NSFileManager.defaultManager
 
@@ -405,16 +406,10 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-XX:ParallelGCThreads=2";
 
     // On iOS 26+, use mirror mapped JIT for better code cache performance.
-    // JDK 25 (jre25-ios-v1) has a bug in MirrorMappedCodeCache that causes
-    // SIGBUS in ScavengableNMethods::register_nmethod during JIT compilation.
-    // jre25-ios-v2 is supposed to fix this, but keep the flag off for Java 25
-    // until v2 is confirmed stable across all devices.
-    NSString *currentJavaHome = [NSString stringWithUTF8String:getenv("JAVA_HOME") ?: ""];
-    BOOL isJava25Home = [currentJavaHome containsString:@"java-25"];
+    // JDK 25 (jre25-ios-v10+) has the mirror_mapping HotSpot patch applied,
+    // so MirrorMappedCodeCache works correctly. Enable for all Java versions.
     if (@available(iOS 26.0, *)) {
-        if (!isJava25Home) {
-            margv[++margc] = "-XX:+MirrorMappedCodeCache";
-        }
+        margv[++margc] = "-XX:+MirrorMappedCodeCache";
     }
 
     // Disable Forge 1.16.x early progress window
@@ -505,7 +500,16 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     init_loadCustomJvmFlags(&margc, (const char **)margv);
     NSLog(@"[Init] Found JLI lib");
 
-    NSString *classpath = [NSString stringWithFormat:@"%@/*", librariesPath];
+    NSString *lwjglVersion = [VersionDirectoryManager resolveEffectiveLwjglVersion];
+    NSString *lwjglJarPath;
+    if ([lwjglVersion isEqualToString:@"3.4.1"]) {
+        lwjglJarPath = [librariesPath stringByAppendingPathComponent:@"lwjgl41/lwjgl.jar"];
+    } else {
+        lwjglJarPath = [librariesPath stringByAppendingPathComponent:@"lwjgl33/lwjgl.jar"];
+    }
+    setenv("LWJGL_VERSION", lwjglVersion.UTF8String, 1);
+
+    NSString *classpath = [NSString stringWithFormat:@"%@/*:%@", librariesPath, lwjglJarPath];
     if (launchJar) {
         classpath = [classpath stringByAppendingFormat:@":%@", launchTarget];
     }
@@ -520,7 +524,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     }
 
     if ([launchTarget isKindOfClass:NSDictionary.class]) {
-        margv[++margc] = [launchTarget[@"id"] UTF8String];
+        margv[++margc] = VersionDirectoryManager.shared.currentVersion.UTF8String;
     } else {
         margv[++margc] = [launchTarget UTF8String];
     }
